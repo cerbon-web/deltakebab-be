@@ -1,33 +1,17 @@
 import { Router, Request, Response } from 'express';
-import { z } from 'zod';
 import { registerUser, loginUser } from '../services/authService';
+import { validate } from '../middleware/validate';
+import { registerSchema, loginSchema } from '../validators/schemas';
 
 const router = Router();
 
-const registerSchema = z.object({
-  name: z.string().min(1),
-  email: z.string().email().optional(),
-  phone: z.string().min(5),
-  password: z.string().min(6)
-});
-
-const loginSchema = z.object({
-  email: z.string().email().optional(),
-  phone: z.string().min(5).optional(),
-  password: z.string().min(6)
-}).refine(data => Boolean(data.email || data.phone), {
-  message: 'Email or phone is required'
-});
-
-router.post('/register', async (req: Request, res: Response) => {
-  const data = registerSchema.parse(req.body);
-  const result = await registerUser(data);
+router.post('/register', validate(registerSchema), async (req: Request, res: Response) => {
+  const result = await registerUser(req.body);
   res.status(201).json(result);
 });
 
-router.post('/login', async (req: Request, res: Response) => {
-  const data = loginSchema.parse(req.body);
-  const result = await loginUser(data);
+router.post('/login', validate(loginSchema), async (req: Request, res: Response) => {
+  const result = await loginUser(req.body);
   res.status(200).json(result);
 });
 
