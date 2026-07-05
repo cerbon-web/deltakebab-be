@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import jwt, { SignOptions } from 'jsonwebtoken';
-import { db } from '../database/knex';
+import { prisma } from '../database/prisma';
 import { config } from '../config';
 
 const signOptions = {
@@ -9,40 +9,101 @@ const signOptions = {
 
 export const registerUser = async ({ name, email, phone, password }: { name: string; email?: string; phone: string; password: string }) => {
   const passwordHash = await bcrypt.hash(password, 10);
-  const [userId] = await db('users').insert({
-    name,
-    email: email ?? null,
-    phone,
-    password_hash: passwordHash,
-    role: 'CUSTOMER',
-    created_at: db.fn.now(),
-    updated_at: db.fn.now()
+  
+  const user = await prisma.user.create({
+    data: {
+      name,
+      email: email ?? `user-${Date.now()}@local`,
+      phone,
+      passwordHash,
+      authProvider: 'NATIVE',
+      roles: {
+        create: {
+          role: {
+            connectOrCreate: {
+              where: { name: 'CUSTOMER' },
+              create: { name: 'CUSTOMER' }
+            }
+          }
+        }
+      }
+    },
+    include: { roles: { include: { role: true } } }
   });
 
-  const token = jwt.sign({ id: Number(userId), role: 'CUSTOMER' }, config.jwtSecret as jwt.Secret, signOptions);
+  const roleNames = user.roles.map(r => r.role.name);
+  const token = jwt.sign({ id: user.id, roles: roleNames }, config.jwtSecret as jwt.Secret, signOptions);
 
-  return { token, user: { id: Number(userId), name, email, phone, role: 'CUSTOMER' } };
+  return { 
+    token, 
+    user: { 
+      id: user.id, 
+      name: user.name, 
+      email: user.email, 
+      phone: user.phone, 
+      roles: roleNames 
+    } 
+  };
 };
 
 export const loginUser = async ({ email, phone, password }: { email?: string; phone?: string; password: string }) => {
-  const user = await db('users')
-    .where(function () {
-      if (email) this.where('email', email);
-      if (phone) this.orWhere('phone', phone);
-    })
-    .first();
+  const user = await prisma.user.findFirst({
+    where: {
+      OR: [
+        email ? { email } : undefined,
+        phone ? { phone } : undefined
+      ].filter(Boolean) as any
+    },
+    include: { roles: { include: { role: true } } }
+  });
 
   if (!user) {
     throw new Error('Invalid credentials');
   }
 
-  const isValid = await bcrypt.compare(password, user.password_hash);
+  if (user.isBlocked) {
+    throw new Error('User account is blocked');
+  }
+
+  const isValid = user.passwordHash ? await bcrypt.compare(password, user.passwordHash) : false;
 
   if (!isValid) {
     throw new Error('Invalid credentials');
   }
 
-  const token = jwt.sign({ id: user.id, role: user.role }, config.jwtSecret as jwt.Secret, signOptions);
+  const roleNames = user.roles.map(r => r.role.name);
+  const token = jwt.sign({ id: user.id, roles: roleNames }, config.jwtSecret as jwt.Secret, signOptions);
 
-  return { token, user: { id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role } };
+  return { 
+    token, 
+    user: { 
+      id: user.id, 
+      name: user.name, 
+      email: user.email, 
+      phone: user.phone, 
+      roles: roleNames 
+    } 
+  };
+};
+
+export const getUserById = async (userId: string) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { roles: { include: { role: true } } }
+  });
+
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  const roleNames = user.roles.map(r => r.role.name);
+
+  return { 
+    id: user.id, 
+    name: user.name, 
+    email: user.email, 
+    phone: user.phone, 
+    roles: roleNames,
+    isBlocked: user.isBlocked
+  };
 };

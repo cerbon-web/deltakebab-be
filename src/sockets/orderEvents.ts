@@ -1,6 +1,6 @@
 import { getSocket } from './index';
 
-export const emitOrderUpdate = (orderId: number, payload: unknown) => {
+export const emitOrderUpdate = (orderId: string, payload: unknown) => {
   getSocket().to(`order:${orderId}`).emit('order:update', payload);
 };
 

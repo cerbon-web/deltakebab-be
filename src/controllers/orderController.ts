@@ -7,26 +7,27 @@ export const createOrderController = async (req: Request, res: Response) => {
 };
 
 export const getMyOrdersController = async (req: Request, res: Response) => {
-  const orders = await getOrdersForCustomer({ customerId: Number(req.query.customerId), phone: String(req.query.phone || '') });
+  const customerId = typeof req.query.customerId === 'string' ? req.query.customerId : undefined;
+  const orders = await getOrdersForCustomer({ customerId, phone: String(req.query.phone || '') });
   res.json(orders);
 };
 
 export const getOrderController = async (req: Request, res: Response) => {
-  const order = await getOrderById(Number(req.params.id));
+  const order = await getOrderById(req.params.id);
   res.json(order);
 };
 
 export const updateOrderStatusController = async (req: Request, res: Response) => {
-  const updated = await updateOrderStatus(Number(req.params.id), req.body.status, req.body.actorType || 'SYSTEM', req.body.actorId || null, req.body.comment);
+  const updated = await updateOrderStatus(req.params.id, req.body.status, req.body.actorType || 'SYSTEM', req.body.actorId || null, req.body.comment);
   res.json(updated);
 };
 
 export const restaurantOrdersController = async (req: Request, res: Response) => {
-  const orders = await listRestaurantOrders(Number(req.query.restaurantId));
+  const orders = await listRestaurantOrders(String(req.query.restaurantId || ''));
   res.json(orders);
 };
 
 export const driverOrdersController = async (req: Request, res: Response) => {
-  const orders = await listDriverOrders(Number(req.query.driverId));
+  const orders = await listDriverOrders(String(req.query.driverId || ''));
   res.json(orders);
 };

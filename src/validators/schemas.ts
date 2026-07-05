@@ -16,15 +16,16 @@ export const loginSchema = z.object({
 });
 
 export const createOrderSchema = z.object({
-  restaurantId: z.number().int().positive(),
-  customerId: z.number().int().positive().optional(),
+  branchId: z.string().min(1),
+  restaurantId: z.string().min(1).optional(),
+  customerId: z.string().min(1).optional(),
   guestName: z.string().min(1).optional(),
-  guestPhone: z.string().min(5).optional(),
+  guestPhone: z.string().min(5),
   orderType: z.enum(['DELIVERY', 'SELF_PICKUP']),
   paymentMethod: z.enum(['CASH', 'CARD']),
   items: z.array(z.object({
-    itemId: z.number().int().positive(),
-    sizeId: z.number().int().positive().nullable().optional(),
+    itemId: z.string().min(1),
+    sizeId: z.string().min(1).nullable().optional(),
     quantity: z.number().int().positive(),
     unitPrice: z.number().nonnegative(),
     notes: z.string().optional()
@@ -34,20 +35,18 @@ export const createOrderSchema = z.object({
 });
 
 export const createChatRoomSchema = z.object({
-  orderId: z.number().int().positive(),
-  type: z.enum(['CUSTOMER_RESTAURANT', 'CUSTOMER_DRIVER'])
+  orderId: z.string().min(1)
 });
 
 export const createChatMessageSchema = z.object({
-  roomId: z.number().int().positive(),
-  senderUserId: z.number().int().positive().nullable().optional(),
-  senderRole: z.enum(['CUSTOMER', 'STAFF', 'DRIVER', 'SYSTEM']),
+  roomId: z.string().min(1),
+  senderUserId: z.string().min(1),
   message: z.string().min(1)
 });
 
 export const updateOrderStatusSchema = z.object({
-  status: z.enum(['NEW', 'RECEIVED', 'ACCEPTED', 'PREPARING', 'READY_FOR_PICKUP', 'PICKED_UP', 'ON_THE_WAY', 'DELIVERED', 'FINISHED', 'CANCELLED']),
+  status: z.enum(['NEW', 'RECEIVED', 'ACCEPTED', 'PREPARING', 'READY_FOR_PICKUP', 'PICKED_UP', 'IN_DELIVERY', 'DELIVERED', 'FINISHED', 'FAILED_DELIVERY', 'CANCELLED']),
   actorType: z.enum(['CUSTOMER', 'STAFF', 'DRIVER', 'SYSTEM']).optional(),
-  actorId: z.number().int().positive().nullable().optional(),
+  actorId: z.string().min(1).nullable().optional(),
   comment: z.string().optional()
 });

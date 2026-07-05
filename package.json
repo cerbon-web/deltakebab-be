@@ -10,21 +10,26 @@
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "start": "node dist/index.js",
     "lint": "eslint . --ext .ts",
-    "migrate": "knex migrate:latest --knexfile knexfile.ts",
-    "migrate:rollback": "knex migrate:rollback --knexfile knexfile.ts"
+    "migrate": "npx prisma migrate dev",
+    "migrate:reset": "npx prisma migrate reset --force",
+    "db:seed": "npx prisma db seed",
+    "verify:db-utils": "node scripts/verify-db-utils.js"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
+    "@prisma/client": "^5.22.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.4",
     "http-status-codes": "^2.3.0",
     "jsonwebtoken": "^9.0.2",
+    "prisma": "^5.22.0",
     "socket.io": "^4.8.0",
-    "zod": "^3.23.2",
-    "knex": "^2.5.1",
-    "mysql2": "^3.7.0",
-    "winston": "^3.10.0"
+    "winston": "^3.10.0",
+    "zod": "^3.23.2"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.2",

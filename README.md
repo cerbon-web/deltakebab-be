@@ -6,10 +6,24 @@ Production-ready Node.js backend for the Delta Kebab restaurant platform.
 
 This backend provides:
 - REST API endpoints for restaurants, auth, and menu data
-- MySQL integration using `knex`
+- MySQL integration using `Prisma`
 - TypeScript strict mode
 - Socket.IO scaffolding for real-time updates
 - Environment configuration and migrations
+
+## Docker setup
+
+Run the full stack with:
+
+```bash
+docker compose up --build
+```
+
+This starts:
+- MySQL on port 3306
+- Backend on port 4000
+
+The backend waits for the database and applies Prisma migrations before startup.
 
 ## Setup
 

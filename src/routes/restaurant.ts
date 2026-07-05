@@ -15,7 +15,7 @@ router.get('/nearest', async (req: Request, res: Response) => {
 });
 
 router.get('/:id', async (req: Request, res: Response) => {
-  const restaurant = await getRestaurantById(Number(req.params.id));
+  const restaurant = await getRestaurantById(req.params.id);
   res.json(restaurant);
 });
 

@@ -1,0 +1,42 @@
+services:
+  db:
+    image: mysql:8.4
+    container_name: delta-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: delta_kebab_db
+      MYSQL_USER: delta
+      MYSQL_PASSWORD: delta
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: delta-backend
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: "mysql://delta:delta@db:3306/delta_kebab_db"
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: delta
+      DB_PASSWORD: delta
+      DB_NAME: delta_kebab_db
+      JWT_SECRET: supersecret
+      JWT_EXPIRES_IN: 1d
+      PORT: 4000
+      NODE_ENV: development
+    ports:
+      - "4000:4000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+
+volumes:
+  mysql-data:

@@ -13,6 +13,6 @@ export const nearestRestaurantsController = async (req: Request, res: Response) 
 };
 
 export const restaurantDetailController = async (req: Request, res: Response) => {
-  const restaurant = await getRestaurantById(Number(req.params.id));
+  const restaurant = await getRestaurantById(req.params.id);
   res.json(restaurant);
 };

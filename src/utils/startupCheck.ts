@@ -1,9 +1,9 @@
-import { db } from '../database/knex';
+import { prisma } from '../database/prisma';
 import { logger } from './logger';
 
 export const verifyDatabaseConnection = async () => {
   try {
-    await db.raw('SELECT 1');
+    await prisma.$queryRaw`SELECT 1`;
     logger.info('Database connection verified');
     return true;
   } catch (error) {

@@ -7,7 +7,7 @@ export const createChatRoomController = async (req: Request, res: Response) => {
 };
 
 export const getChatMessagesController = async (req: Request, res: Response) => {
-  const messages = await getChatMessages(Number(req.params.roomId));
+  const messages = await getChatMessages(req.params.roomId);
   res.json(messages);
 };
 

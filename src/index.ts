@@ -11,7 +11,14 @@ import { verifyDatabaseConnection } from './utils/startupCheck';
 const app = express();
 const server = http.createServer(app);
 
-app.use(cors());
+const allowedOrigins = ['https://deltakebab.com', 'https://www.deltakebab.com', 'http://localhost:4200'];
+
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 app.use('/api', router);
 app.use(errorHandler);

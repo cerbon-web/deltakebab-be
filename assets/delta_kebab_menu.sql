@@ -18,7 +18,7 @@ DROP TABLE IF EXISTS restaurant_info;
 -- ==========================================
 
 CREATE TABLE restaurant_info (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     address VARCHAR(255) NOT NULL,
     phone VARCHAR(50) NOT NULL,
