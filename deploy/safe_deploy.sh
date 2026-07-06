@@ -41,15 +41,20 @@ rotate_backups() {
 # Create backup of current app
 create_backup() {
   local bdir="$BACKUP_ROOT/$(timestamp)"
-  log "Creating backup $bdir"
+  # Write a human-friendly creation message to stderr so command
+  # substitution receives only the path on stdout.
+  printf "[%s] Creating backup %s\n" "$(timestamp)" "$bdir" >&2
   mkdir -p "$bdir"
   rsync -a --delete "$DEPLOY_DIR/" "$bdir/"
-  echo "$bdir"
+  printf "%s\n" "$bdir"
 }
 
 # Restore backup
 restore_backup() {
   local bdir="$1"
+  # Sanitize the incoming backup identifier: use the last non-empty line
+  # in case create_backup output included extra log lines when captured.
+  bdir="$(printf '%s' "$bdir" | sed -n '$p')"
   log "Restoring backup from $bdir"
   rm -rf "$DEPLOY_DIR.old" || true
   mv "$DEPLOY_DIR" "$DEPLOY_DIR.old" || true
