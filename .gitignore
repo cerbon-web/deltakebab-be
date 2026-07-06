@@ -5,3 +5,4 @@ coverage/
 .DS_Store
 
 /src/generated/prisma
+server.log

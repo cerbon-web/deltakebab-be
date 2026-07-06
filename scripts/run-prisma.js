@@ -5,15 +5,15 @@ const dotenv = require('dotenv');
 const rootDir = path.resolve(__dirname, '..');
 const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env';
 const envPath = path.resolve(rootDir, envFile);
-const result = dotenv.config({ path: envPath });
+const result = dotenv.config({ path: envPath, override: false });
 
 if (result.error) {
   console.warn(`⚠️ Could not load ${envFile}: ${result.error.message}`);
 }
 
 const env = {
+  ...(result.parsed || {}),
   ...process.env,
-  ...result.parsed,
 };
 
 if (!env.DATABASE_URL && env.DB_HOST && env.DB_USER && env.DB_NAME) {
