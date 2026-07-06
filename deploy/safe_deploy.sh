@@ -74,12 +74,16 @@ wait_for_pm2() {
 wait_for_db_verified() {
   local retries=30
   local delay=2
-  # pm2 logs are usually available via pm2 logs <name> --lines 100
-  log "Waiting for database verification in PM2 logs (up to $((retries*delay))s)"
+  # Check PM2 out log file for the verification message instead of using `pm2 logs` (avoids streaming/EPIPE over SSH)
+  local pm2_log_dir="${PM2_HOME:-$HOME/.pm2}/logs"
+  local out_log="$pm2_log_dir/${PM2_NAME}-out.log"
+  log "Waiting for database verification in PM2 logs (up to $((retries*delay))s) checking $out_log"
   for i in $(seq 1 $retries); do
-    if pm2 logs "$PM2_NAME" --lines 200 | grep -q "Database connection verified"; then
-      log "Database connection verified by application logs"
-      return 0
+    if [ -f "$out_log" ]; then
+      if tail -n 200 "$out_log" | grep -q "Database connection verified"; then
+        log "Database connection verified by application logs"
+        return 0
+      fi
     fi
     sleep $delay
   done
@@ -115,6 +119,16 @@ main() {
   npm run build
 
   log "Restarting PM2 with new release"
+  # Export environment from .env.production so child processes (seed/prisma) see DATABASE_URL
+  if [ -f "$DEPLOY_DIR/.env.production" ]; then
+    log "Exporting environment from $DEPLOY_DIR/.env.production"
+    # shellcheck disable=SC1090
+    set -a
+    # shellcheck source=/dev/null
+    . "$DEPLOY_DIR/.env.production"
+    set +a
+  fi
+
   NODE_ENV=production pm2 restart "$PM2_NAME" --update-env || NODE_ENV=production pm2 start "$DEPLOY_DIR/dist/index.js" --name "$PM2_NAME" --update-env
 
   if ! wait_for_pm2; then
