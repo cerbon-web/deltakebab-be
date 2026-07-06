@@ -34,6 +34,14 @@ const dbFromUrl = parseDatabaseUrl(process.env.DATABASE_URL);
 const nodeEnv = (process.env.NODE_ENV || 'local').toLowerCase();
 const environment = nodeEnv === 'production' ? 'production' : 'local';
 
+const defaultSslKeyPath = '/etc/letsencrypt/live/dapi.cerbon.id/privkey.pem';
+const defaultSslCertPath = '/etc/letsencrypt/live/dapi.cerbon.id/fullchain.pem';
+const defaultSslCaPath = '/etc/letsencrypt/live/dapi.cerbon.id/chain.pem';
+
+const sslKeyPath = process.env.SSL_KEY_PATH?.trim() || (environment === 'production' ? defaultSslKeyPath : undefined);
+const sslCertPath = process.env.SSL_CERT_PATH?.trim() || (environment === 'production' ? defaultSslCertPath : undefined);
+const sslCaPath = process.env.SSL_CA_PATH?.trim() || (environment === 'production' ? defaultSslCaPath : undefined);
+
 export const config = {
   environment,
   nodeEnv,
@@ -41,10 +49,10 @@ export const config = {
   port: Number(process.env.PORT || 4000),
   jwtSecret: process.env.JWT_SECRET || 'supersecret',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '1d',
-  sslKeyPath: process.env.SSL_KEY_PATH,
-  sslCertPath: process.env.SSL_CERT_PATH,
-  sslCaPath: process.env.SSL_CA_PATH,
-  useHttps: environment === 'production' && Boolean(process.env.SSL_KEY_PATH && process.env.SSL_CERT_PATH),
+  sslKeyPath,
+  sslCertPath,
+  sslCaPath,
+  useHttps: environment === 'production' && Boolean(sslKeyPath && sslCertPath),
   db: dbFromUrl || {
     host: process.env.DB_HOST || '127.0.0.1',
     port: Number(process.env.DB_PORT || 3306),
