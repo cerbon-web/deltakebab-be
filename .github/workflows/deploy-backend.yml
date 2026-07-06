@@ -85,15 +85,17 @@ jobs:
             --exclude '*.log' \
             ./ "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/app/" -e "ssh -p $SSH_PORT"
 
-      - name: Install dependencies, build, and restart PM2
+      - name: Install dependencies, build, verify and restart PM2 (safe deploy)
+        env:
+          PM2_NAME: delta-be
+          HEALTH_URL: https://dapi.cerbon.id:4000/api/health
         run: |
           SSH_PORT="${{ secrets.SSH_PORT }}"
           if [ -z "$SSH_PORT" ]; then SSH_PORT=22; fi
+          scp -P "$SSH_PORT" -r deploy/safe_deploy.sh "${{ github.workspace }}/deploy/safe_deploy.sh" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/safe_deploy.sh"
           ssh -p "$SSH_PORT" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" <<'EOF'
             set -e
-            cd ~/app
-            npm ci
-            npm run build
-            chmod 600 .env.production || true
-            NODE_ENV=production pm2 restart delta-be --update-env || NODE_ENV=production pm2 start dist/index.js --name delta-be --update-env
+            chmod +x ~/safe_deploy.sh
+            # Run safe deploy on server: deploy_dir, backup_root, artifact_dir, keep_backups
+            ~/safe_deploy.sh ~/app ~/backups/delta-be ~/app 5
           EOF
