@@ -115,34 +115,115 @@ check_health() {
 
 main() {
   rotate_backups
-  local backup=$(create_backup)
 
-  log "Uploading new release"
-  rsync -az --delete "$ARTIFACT_DIR/" "$DEPLOY_DIR/"
+  # Prepare a temporary release directory where we stage, install and build
+  local release_tmp="$BACKUP_ROOT/release-$(timestamp)"
+  log "Preparing release in $release_tmp"
+  mkdir -p "$release_tmp"
 
-  log "Installing dependencies and building"
-  cd "$DEPLOY_DIR"
+  log "Uploading new release to temporary dir"
+  rsync -az --delete "$ARTIFACT_DIR/" "$release_tmp/"
+
+  log "Installing dependencies and building in temporary release"
+  cd "$release_tmp"
   npm ci
   npm run build
 
-  log "Restarting PM2 with new release"
-  # Export environment from .env.production so child processes (seed/prisma) see DATABASE_URL
-  if [ -f "$DEPLOY_DIR/.env.production" ]; then
-    log "Exporting environment from $DEPLOY_DIR/.env.production"
-    # shellcheck disable=SC1090
+  # Export environment from the staged .env.production for seed/prisma if present
+  if [ -f "$release_tmp/.env.production" ]; then
+    log "Exporting environment from $release_tmp/.env.production for staged release"
     set -a
     # shellcheck source=/dev/null
-    . "$DEPLOY_DIR/.env.production"
+    . "$release_tmp/.env.production"
     set +a
 
-    # If DATABASE_URL is not provided directly, construct it from DB_* vars
-    if [ -z "${DATABASE_URL:-}" ]; then
-      if [ -n "${DB_HOST:-}" ] && [ -n "${DB_USER:-}" ] && [ -n "${DB_NAME:-}" ]; then
-        DB_PORT_VAL="${DB_PORT:-3306}"
-        export DATABASE_URL="mysql://${DB_USER}:${DB_PASSWORD:-}@${DB_HOST}:${DB_PORT_VAL}/${DB_NAME}"
-        log "Constructed DATABASE_URL from DB_* environment variables"
+    if [ -z "${DATABASE_URL:-}" ] && [ -n "${DB_HOST:-}" ] && [ -n "${DB_USER:-}" ] && [ -n "${DB_NAME:-}" ]; then
+      DB_PORT_VAL="${DB_PORT:-3306}"
+      export DATABASE_URL="mysql://${DB_USER}:${DB_PASSWORD:-}@${DB_HOST}:${DB_PORT_VAL}/${DB_NAME}"
+      log "Constructed DATABASE_URL for staged release from DB_* variables"
+    fi
+  fi
+
+  # Run the staged release directly on a test port so it doesn't conflict with the live process
+  local test_port
+  test_port=$((PORT + 1))
+  local candidate_log="$release_tmp/candidate.log"
+  log "Starting staged release for verification on port $test_port (logs: $candidate_log)"
+  # start node directly so PM2 isn't disturbed; redirect output to candidate log
+  NODE_ENV=production PORT="$test_port" node dist/index.js > "$candidate_log" 2>&1 &
+  local candidate_pid=$!
+
+  # Wait for staged release to report DB verification or health
+  local verified=1
+  for i in $(seq 1 30); do
+    if [ -f "$candidate_log" ]; then
+      if tail -n 200 "$candidate_log" | grep -q "Database connection verified"; then
+        log "Staged release verified DB connection"
+        verified=0
+        break
+      fi
+      if curl -sS --fail --max-time 2 "http://127.0.0.1:${test_port}/api/health" | grep -q '\"status\".*\"ok\"'; then
+        log "Staged release health endpoint OK"
+        verified=0
+        break
       fi
     fi
+    sleep 2
+  done
+
+  # Tear down candidate process
+  if ps -p "$candidate_pid" > /dev/null 2>&1; then
+    log "Stopping staged release (pid $candidate_pid)"
+    kill "$candidate_pid" || true
+    # give it a moment
+    sleep 1
+  fi
+
+  if [ "$verified" -ne 0 ]; then
+    log "Staged release verification failed; cleaning up and aborting"
+    rm -rf "$release_tmp"
+    exit 1
+  fi
+
+  log "Staged release verified. Creating backup of current deployment (if present)"
+  local backup=""
+  if [ -d "$DEPLOY_DIR" ] && [ "$(ls -A "$DEPLOY_DIR" 2>/dev/null || true)" ]; then
+    backup=$(create_backup)
+  else
+    log "No existing deployment found; skipping backup creation"
+  fi
+
+  # Atomically swap in the new release
+  log "Swapping in new release"
+  rm -rf "$DEPLOY_DIR.old" || true
+  if [ -d "$DEPLOY_DIR" ]; then
+    mv "$DEPLOY_DIR" "$DEPLOY_DIR.old"
+  fi
+  mv "$release_tmp" "$DEPLOY_DIR"
+
+  # Restart PM2 with the new release (stop old process first to free the port)
+  if pm2 pid "$PM2_NAME" >/dev/null 2>&1; then
+    log "Stopping existing PM2 process $PM2_NAME before starting new one"
+    pm2 stop "$PM2_NAME" || true
+  fi
+
+  NODE_ENV=production pm2 start "$DEPLOY_DIR/dist/index.js" --name "$PM2_NAME" --update-env || {
+    log "Failed to start PM2 process for new release"
+    log "Attempting to restore previous backup"
+    if [ -n "$backup" ]; then
+      restore_backup "$backup"
+    fi
+    exit 1
+  }
+
+  # Wait for PM2 and then verify via PM2-managed logs and public health
+  if ! wait_for_pm2; then
+    log "PM2 failed to start new process after swap"
+    log "Attempting to restore previous backup"
+    if [ -n "$backup" ]; then
+      restore_backup "$backup"
+    fi
+    exit 1
   fi
 
   # Rotate or archive the current PM2 out log so we only look at fresh logs for verification
@@ -150,30 +231,26 @@ main() {
     mv "$OUT_LOG" "$OUT_LOG.$(timestamp).old" || true
   fi
 
-  NODE_ENV=production pm2 restart "$PM2_NAME" --update-env || NODE_ENV=production pm2 start "$DEPLOY_DIR/dist/index.js" --name "$PM2_NAME" --update-env
-
-  if ! wait_for_pm2; then
-    log "PM2 failed to start process"
-    log "Rolling back to previous backup"
-    restore_backup "$backup"
-    exit 1
-  fi
-
   if ! wait_for_db_verified; then
-    log "Database verification failed"
-    log "Rolling back to previous backup"
-    restore_backup "$backup"
+    log "Database verification failed for PM2-managed process"
+    log "Attempting to restore previous backup"
+    if [ -n "$backup" ]; then
+      restore_backup "$backup"
+    fi
     exit 1
   fi
 
   if ! check_health; then
-    log "Health check failed"
-    log "Rolling back to previous backup"
-    restore_backup "$backup"
+    log "Health check failed for PM2-managed process"
+    log "Attempting torestore previous backup"
+    if [ -n "$backup" ]; then
+      restore_backup "$backup"
+    fi
     exit 1
   fi
 
   log "Deployment successful"
+  rotate_backups
   exit 0
 }
 
