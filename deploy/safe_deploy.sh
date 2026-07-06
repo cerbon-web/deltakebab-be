@@ -164,9 +164,13 @@ check_health_for_url() {
   local url="$1"
   local retries=30
   local delay=2
+  local curl_args=(curl -sS --fail --max-time 5)
+  if [[ "$url" == https://* ]]; then
+    curl_args+=(--insecure)
+  fi
   log "Checking health endpoint $url"
   for i in $(seq 1 $retries); do
-    if curl -sS --fail --max-time 5 "$url" | grep -q '"status".*"ok"'; then
+    if "${curl_args[@]}" "$url" | grep -q '"status".*"ok"'; then
       log "Health endpoint reports OK"
       return 0
     fi
@@ -221,7 +225,7 @@ main() {
   # Wait for the staged release to prove the database is reachable before treating it as valid
   local verified=1
   if wait_for_database_verification "$release_tmp"; then
-    if check_health_for_url "http://127.0.0.1:${test_port}/api/health"; then
+    if check_health_for_url "https://127.0.0.1:${test_port}/api/health"; then
       log "Staged release verified DB connection and health endpoint"
       verified=0
     fi
