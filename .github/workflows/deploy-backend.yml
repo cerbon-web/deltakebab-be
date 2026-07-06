@@ -3,6 +3,7 @@ name: Deploy Backend to DigitalOcean Droplet
 on:
   push:
     branches:
+      - main
       - production
 
 permissions:
