@@ -15,6 +15,8 @@ import { verifyDatabaseConnection } from './utils/startupCheck';
 const app = express();
 let server: http.Server | https.Server;
 
+logger.info(`Starting backend in environment=${config.environment}; useHttps=${config.useHttps}`);
+
 if (config.useHttps) {
   try {
     const key = fs.readFileSync(config.sslKeyPath!, 'utf8');

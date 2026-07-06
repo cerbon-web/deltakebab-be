@@ -10,7 +10,7 @@ type DatabaseConfig = {
 };
 
 const selectedEnvFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env';
-const envPath = path.resolve(process.cwd(), selectedEnvFile);
+const envPath = path.resolve(__dirname, '..', selectedEnvFile);
 dotenv.config({ path: envPath });
 
 const parseDatabaseUrl = (url?: string): DatabaseConfig | null => {

@@ -30,6 +30,23 @@ jobs:
           if [ -z "$SSH_PORT" ]; then SSH_PORT=22; fi
           ssh-keyscan -p "$SSH_PORT" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
 
+      - name: Generate production environment file
+        run: |
+          cat > .env.production <<'EOF'
+NODE_ENV=production
+PORT=4000
+DB_HOST=${{ secrets.DB_HOST }}
+DB_PORT=${{ secrets.DB_PORT }}
+DB_USER=${{ secrets.DB_USER }}
+DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+DB_NAME=${{ secrets.DB_NAME }}
+SSL_KEY_PATH=${{ secrets.SSL_KEY_PATH }}
+SSL_CERT_PATH=${{ secrets.SSL_CERT_PATH }}
+SSL_CA_PATH=${{ secrets.SSL_CA_PATH }}
+JWT_SECRET=${{ secrets.JWT_SECRET }}
+JWT_EXPIRES_IN=${{ secrets.JWT_EXPIRES_IN }}
+EOF
+
       - name: Sync backend files to server
         run: |
           SSH_PORT="${{ secrets.SSH_PORT }}"
@@ -52,5 +69,6 @@ jobs:
             cd ~/app
             npm ci
             npm run build
-            pm2 restart delta-be || pm2 start dist/index.js --name delta-be
+            chmod 600 .env.production || true
+            NODE_ENV=production pm2 restart delta-be --update-env || NODE_ENV=production pm2 start dist/index.js --name delta-be --update-env
           EOF
