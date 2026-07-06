@@ -1,6 +1,10 @@
-import "dotenv/config";
+import path from "path";
+import dotenv from "dotenv";
 import { PrismaClient } from "@prisma/client";
 import bcryptjs from "bcryptjs";
+
+const selectedEnvFile = process.env.NODE_ENV === "production" ? ".env.production" : ".env";
+dotenv.config({ path: path.resolve(process.cwd(), selectedEnvFile) });
 
 const prisma = new PrismaClient();
 

@@ -8,14 +8,18 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "postinstall": "npx prisma@5.22.0 generate --schema=./prisma/schema.prisma",
+    "prestart": "npm run db:prepare",
     "start": "node dist/index.js",
     "lint": "eslint . --ext .ts",
     "migrate": "npx prisma migrate dev",
     "migrate:reset": "npx prisma migrate reset --force",
-    "db:seed": "npx prisma db seed",
+    "db:prepare": "node scripts/run-prisma.js generate --schema=./prisma/schema.prisma && node scripts/run-prisma.js db push && node scripts/run-prisma.js db seed",
+    "db:seed": "node scripts/run-prisma.js db seed",
     "verify:db-utils": "node scripts/verify-db-utils.js"
   },
   "prisma": {
+    "schema": "prisma/schema.prisma",
     "seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {

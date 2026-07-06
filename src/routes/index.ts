@@ -5,11 +5,18 @@ import menuRoutes from './menu';
 import orderRoutes from './orders';
 import chatRoutes from './chat';
 import adminRoutes from './admin';
+import { config } from '../config';
 
 const router = Router();
 
 router.get('/health', (_req, res) => {
-  res.json({ status: 'ok' });
+  const healthResponse: { status: 'ok'; environment?: string } = { status: 'ok' };
+
+  if (!config.isProduction) {
+    healthResponse.environment = config.environment;
+  }
+
+  res.json(healthResponse);
 });
 
 router.use('/auth', authRoutes);

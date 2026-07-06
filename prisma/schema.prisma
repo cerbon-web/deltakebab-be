@@ -3,6 +3,9 @@
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "debian-openssl-3.0.x"]
+  // Force output into the project's node_modules so hosted `npx prisma generate`
+  // produces a client inside the deployment folder instead of a global path.
+  output = "../node_modules/.prisma/client"
 }
 
 datasource db {
