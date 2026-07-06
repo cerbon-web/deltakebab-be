@@ -116,14 +116,27 @@ rotate_pm2_log() {
 
 # Wait for application startup log indicating DB verified
 wait_for_db_verified_log() {
-  local retries=30
+  local app_dir="$1"
+  local retries=45
   local delay=2
+  local log_pattern="Database connection verified"
   log "Waiting for database verification in PM2 logs (up to $((retries*delay))s) checking $OUT_LOG"
   for i in $(seq 1 $retries); do
-    if [ -f "$OUT_LOG" ] && tail -n 200 "$OUT_LOG" 2>/dev/null | grep -q "Database connection verified"; then
+    if compgen -G "$PM2_LOG_DIR/${PM2_NAME}-*.log" > /dev/null 2>&1; then
+      if grep -R -h -q "$log_pattern" "$PM2_LOG_DIR"/${PM2_NAME}-*.log 2>/dev/null; then
+        log "Database connection verified by application logs"
+        return 0
+      fi
+    elif [ -f "$OUT_LOG" ] && tail -n 200 "$OUT_LOG" 2>/dev/null | grep -q "$log_pattern"; then
       log "Database connection verified by application logs"
       return 0
     fi
+
+    if verify_database_from_release "$app_dir"; then
+      log "Database connection verified by runtime query"
+      return 0
+    fi
+
     sleep "$delay"
   done
   return 1
@@ -277,7 +290,7 @@ main() {
 
   rotate_pm2_log
 
-  if ! wait_for_db_verified_log; then
+  if ! wait_for_db_verified_log "$DEPLOY_DIR"; then
     log "Database verification failed for PM2-managed process"
     log "Attempting to restore previous release"
     restore_previous_release "$backup" || true
