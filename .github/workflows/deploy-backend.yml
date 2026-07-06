@@ -92,10 +92,15 @@ jobs:
         run: |
           SSH_PORT="${{ secrets.SSH_PORT }}"
           if [ -z "$SSH_PORT" ]; then SSH_PORT=22; fi
-          scp -P "$SSH_PORT" -r deploy/safe_deploy.sh "${{ github.workspace }}/deploy/safe_deploy.sh" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/safe_deploy.sh"
           ssh -p "$SSH_PORT" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" <<'EOF'
             set -e
-            chmod +x ~/safe_deploy.sh
-            # Run safe deploy on server: deploy_dir, backup_root, artifact_dir, keep_backups
-            ~/safe_deploy.sh ~/app ~/backups/delta-be ~/app 5
+            # The repo has already been rsynced to ~/app. Run the safe deploy script from there.
+            if [ -f ~/app/deploy/safe_deploy.sh ]; then
+              chmod +x ~/app/deploy/safe_deploy.sh
+              # Run safe deploy on server: deploy_dir, backup_root, artifact_dir, keep_backups
+              ~/app/deploy/safe_deploy.sh ~/app ~/backups/delta-be ~/app 5
+            else
+              echo "ERROR: ~/app/deploy/safe_deploy.sh not found"
+              exit 1
+            fi
           EOF
