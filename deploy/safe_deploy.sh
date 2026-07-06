@@ -314,6 +314,7 @@ main() {
   log "Staged release verified. Creating backup of the previous deployment (if present)"
   if [ -d "$DEPLOY_DIR.old" ] && [ "$(ls -A "$DEPLOY_DIR.old" 2>/dev/null || true)" ]; then
     backup=$(create_backup_from_dir "$DEPLOY_DIR.old")
+    rm -rf "$DEPLOY_DIR.old"
   else
     log "No existing deployment found; skipping backup creation"
   fi
