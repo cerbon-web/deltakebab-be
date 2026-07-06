@@ -6,6 +6,23 @@ import bcryptjs from "bcryptjs";
 const selectedEnvFile = process.env.NODE_ENV === "production" ? ".env.production" : ".env";
 dotenv.config({ path: path.resolve(process.cwd(), selectedEnvFile) });
 
+const ensureDatabaseUrl = (): void => {
+  if (process.env.DATABASE_URL) {
+    return;
+  }
+
+  if (process.env.DB_HOST && process.env.DB_USER && process.env.DB_NAME) {
+    const host = process.env.DB_HOST;
+    const port = process.env.DB_PORT || "3306";
+    const user = encodeURIComponent(process.env.DB_USER);
+    const password = encodeURIComponent(process.env.DB_PASSWORD || "");
+    const database = encodeURIComponent(process.env.DB_NAME);
+    process.env.DATABASE_URL = `mysql://${user}:${password}@${host}:${port}/${database}`;
+  }
+};
+
+ensureDatabaseUrl();
+
 const prisma = new PrismaClient();
 
 async function shouldSeedDatabase(): Promise<boolean> {

@@ -16,6 +16,11 @@ const env = {
   ...result.parsed,
 };
 
+if (!env.DATABASE_URL && env.DB_HOST && env.DB_USER && env.DB_NAME) {
+  const port = env.DB_PORT || '3306';
+  env.DATABASE_URL = `mysql://${encodeURIComponent(env.DB_USER)}:${encodeURIComponent(env.DB_PASSWORD || '')}@${env.DB_HOST}:${port}/${encodeURIComponent(env.DB_NAME)}`;
+}
+
 const command = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 const args = ['prisma', ...process.argv.slice(2)];
 

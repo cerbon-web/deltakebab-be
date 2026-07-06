@@ -10,8 +10,23 @@ type DatabaseConfig = {
 };
 
 const selectedEnvFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env';
-const envPath = path.resolve(__dirname, '..', selectedEnvFile);
+const projectRoot = path.resolve(__dirname, '..', '..');
+const envPath = path.resolve(projectRoot, selectedEnvFile);
 dotenv.config({ path: envPath });
+
+const constructDatabaseUrl = (db: DatabaseConfig): string => {
+  return `mysql://${encodeURIComponent(db.user)}:${encodeURIComponent(db.password || '')}@${db.host}:${db.port}/${encodeURIComponent(db.database)}`;
+};
+
+if (!process.env.DATABASE_URL && process.env.DB_HOST && process.env.DB_USER && process.env.DB_NAME) {
+  process.env.DATABASE_URL = constructDatabaseUrl({
+    host: process.env.DB_HOST,
+    port: Number(process.env.DB_PORT || 3306),
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME,
+  });
+}
 
 const parseDatabaseUrl = (url?: string): DatabaseConfig | null => {
   if (!url) return null;
