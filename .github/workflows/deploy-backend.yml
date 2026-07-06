@@ -31,21 +31,32 @@ jobs:
           ssh-keyscan -p "$SSH_PORT" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Generate production environment file
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          SSL_KEY_PATH: ${{ secrets.SSL_KEY_PATH }}
+          SSL_CERT_PATH: ${{ secrets.SSL_CERT_PATH }}
+          SSL_CA_PATH: ${{ secrets.SSL_CA_PATH }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_EXPIRES_IN: ${{ secrets.JWT_EXPIRES_IN }}
         run: |
           cat > .env.production <<'EOF'
-NODE_ENV=production
-PORT=4000
-DB_HOST=${{ secrets.DB_HOST }}
-DB_PORT=${{ secrets.DB_PORT }}
-DB_USER=${{ secrets.DB_USER }}
-DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-DB_NAME=${{ secrets.DB_NAME }}
-SSL_KEY_PATH=${{ secrets.SSL_KEY_PATH }}
-SSL_CERT_PATH=${{ secrets.SSL_CERT_PATH }}
-SSL_CA_PATH=${{ secrets.SSL_CA_PATH }}
-JWT_SECRET=${{ secrets.JWT_SECRET }}
-JWT_EXPIRES_IN=${{ secrets.JWT_EXPIRES_IN }}
-EOF
+          NODE_ENV=production
+          PORT=4000
+          DB_HOST="$DB_HOST"
+          DB_PORT="$DB_PORT"
+          DB_USER="$DB_USER"
+          DB_PASSWORD="$DB_PASSWORD"
+          DB_NAME="$DB_NAME"
+          SSL_KEY_PATH="$SSL_KEY_PATH"
+          SSL_CERT_PATH="$SSL_CERT_PATH"
+          SSL_CA_PATH="$SSL_CA_PATH"
+          JWT_SECRET="$JWT_SECRET"
+          JWT_EXPIRES_IN="$JWT_EXPIRES_IN"
+          EOF
 
       - name: Sync backend files to server
         run: |
