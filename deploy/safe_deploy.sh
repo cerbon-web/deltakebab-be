@@ -38,15 +38,21 @@ rotate_backups() {
   done
 }
 
-# Create backup of current app
-create_backup() {
+# Create a backup snapshot of a specific deployment directory
+create_backup_from_dir() {
+  local source_dir="$1"
   local bdir="$BACKUP_ROOT/$(timestamp)"
   # Write a human-friendly creation message to stderr so command
   # substitution receives only the path on stdout.
-  printf "[%s] Creating backup %s\n" "$(timestamp)" "$bdir" >&2
+  printf "[%s] Creating backup %s from %s\n" "$(timestamp)" "$bdir" "$source_dir" >&2
   mkdir -p "$bdir"
-  rsync -a --delete "$DEPLOY_DIR/" "$bdir/"
+  rsync -a --delete "$source_dir/" "$bdir/"
   printf "%s\n" "$bdir"
+}
+
+# Create backup of current app
+create_backup() {
+  create_backup_from_dir "$DEPLOY_DIR"
 }
 
 # Restore backup
@@ -55,12 +61,32 @@ restore_backup() {
   # Sanitize the incoming backup identifier: use the last non-empty line
   # in case create_backup output included extra log lines when captured.
   bdir="$(printf '%s' "$bdir" | sed -n '$p')"
+  if [ ! -d "$bdir" ]; then
+    log "Backup directory not found: $bdir"
+    return 1
+  fi
   log "Restoring backup from $bdir"
   rm -rf "$DEPLOY_DIR.old" || true
-  mv "$DEPLOY_DIR" "$DEPLOY_DIR.old" || true
+  if [ -d "$DEPLOY_DIR" ]; then
+    mv "$DEPLOY_DIR" "$DEPLOY_DIR.old" || true
+  fi
   mv "$bdir" "$DEPLOY_DIR"
   log "Restarting PM2 with restored version"
   NODE_ENV=production pm2 restart "$PM2_NAME" --update-env || NODE_ENV=production pm2 start "$DEPLOY_DIR/dist/index.js" --name "$PM2_NAME" --update-env
+}
+
+restore_previous_release() {
+  local backup_path="$1"
+  if [ -n "$backup_path" ] && [ -d "$backup_path" ]; then
+    restore_backup "$backup_path"
+    return 0
+  fi
+  if [ -d "$DEPLOY_DIR.old" ] && [ "$(ls -A "$DEPLOY_DIR.old" 2>/dev/null || true)" ]; then
+    restore_backup "$DEPLOY_DIR.old"
+    return 0
+  fi
+  log "No previous deployment available to restore"
+  return 1
 }
 
 # Wait for PM2 process to report running
@@ -79,43 +105,82 @@ wait_for_pm2() {
   return 1
 }
 
+# Rotate the PM2 out log so only fresh logs are inspected
+rotate_pm2_log() {
+  mkdir -p "$PM2_LOG_DIR"
+  if [ -f "$OUT_LOG" ]; then
+    mv "$OUT_LOG" "$OUT_LOG.$(timestamp).old" || true
+  fi
+  touch "$OUT_LOG"
+}
+
 # Wait for application startup log indicating DB verified
-wait_for_db_verified() {
+wait_for_db_verified_log() {
   local retries=30
   local delay=2
-  # Check PM2 out log file for the verification message instead of using `pm2 logs` (avoids streaming/EPIPE over SSH)
   log "Waiting for database verification in PM2 logs (up to $((retries*delay))s) checking $OUT_LOG"
   for i in $(seq 1 $retries); do
-    if [ -f "$OUT_LOG" ]; then
-      if tail -n 200 "$OUT_LOG" | grep -q "Database connection verified"; then
-        log "Database connection verified by application logs"
-        return 0
-      fi
+    if [ -f "$OUT_LOG" ] && tail -n 200 "$OUT_LOG" 2>/dev/null | grep -q "Database connection verified"; then
+      log "Database connection verified by application logs"
+      return 0
     fi
-    sleep $delay
+    sleep "$delay"
+  done
+  return 1
+}
+
+# Verify the app can reach the database using the built startup check
+verify_database_from_release() {
+  local app_dir="$1"
+  local startup_check="$app_dir/dist/utils/startupCheck.js"
+  if [ ! -f "$startup_check" ]; then
+    log "Startup check module not found at $startup_check"
+    return 1
+  fi
+  log "Verifying database connectivity from $app_dir"
+  (
+    cd "$app_dir"
+    NODE_ENV=production PORT="${PORT:-4000}" node -e "const { verifyDatabaseConnection } = require('./dist/utils/startupCheck'); verifyDatabaseConnection().then((ok) => { if (!ok) process.exit(1); }).catch((err) => { console.error(err); process.exit(1); });"
+  )
+}
+
+# Wait for the database check to succeed for a release directory
+wait_for_database_verification() {
+  local app_dir="$1"
+  local retries=30
+  local delay=2
+  log "Waiting for database verification for $app_dir (up to $((retries*delay))s)"
+  for i in $(seq 1 $retries); do
+    if verify_database_from_release "$app_dir"; then
+      return 0
+    fi
+    sleep "$delay"
   done
   return 1
 }
 
 # Health check
-check_health() {
+check_health_for_url() {
+  local url="$1"
   local retries=30
   local delay=2
-  log "Checking health endpoint $HEALTH_URL"
+  log "Checking health endpoint $url"
   for i in $(seq 1 $retries); do
-    if curl -sS --fail --max-time 5 "$HEALTH_URL" | grep -q '"status".*"ok"'; then
+    if curl -sS --fail --max-time 5 "$url" | grep -q '"status".*"ok"'; then
       log "Health endpoint reports OK"
       return 0
     fi
     log "Health check failed ($i/$retries), retrying in $delay seconds"
-    sleep $delay
+    sleep "$delay"
   done
   return 1
 }
 
-main() {
-  rotate_backups
+check_health() {
+  check_health_for_url "$HEALTH_URL"
+}
 
+main() {
   # Prepare a temporary release directory where we stage, install and build
   local release_tmp="$BACKUP_ROOT/release-$(timestamp)"
   log "Preparing release in $release_tmp"
@@ -153,23 +218,14 @@ main() {
   NODE_ENV=production PORT="$test_port" node dist/index.js > "$candidate_log" 2>&1 &
   local candidate_pid=$!
 
-  # Wait for staged release to report DB verification or health
+  # Wait for the staged release to prove the database is reachable before treating it as valid
   local verified=1
-  for i in $(seq 1 30); do
-    if [ -f "$candidate_log" ]; then
-      if tail -n 200 "$candidate_log" | grep -q "Database connection verified"; then
-        log "Staged release verified DB connection"
-        verified=0
-        break
-      fi
-      if curl -sS --fail --max-time 2 "http://127.0.0.1:${test_port}/api/health" | grep -q '\"status\".*\"ok\"'; then
-        log "Staged release health endpoint OK"
-        verified=0
-        break
-      fi
+  if wait_for_database_verification "$release_tmp"; then
+    if check_health_for_url "http://127.0.0.1:${test_port}/api/health"; then
+      log "Staged release verified DB connection and health endpoint"
+      verified=0
     fi
-    sleep 2
-  done
+  fi
 
   # Tear down candidate process
   if ps -p "$candidate_pid" > /dev/null 2>&1; then
@@ -183,14 +239,6 @@ main() {
     log "Staged release verification failed; cleaning up and aborting"
     rm -rf "$release_tmp"
     exit 1
-  fi
-
-  log "Staged release verified. Creating backup of current deployment (if present)"
-  local backup=""
-  if [ -d "$DEPLOY_DIR" ] && [ "$(ls -A "$DEPLOY_DIR" 2>/dev/null || true)" ]; then
-    backup=$(create_backup)
-  else
-    log "No existing deployment found; skipping backup creation"
   fi
 
   # Atomically swap in the new release
@@ -207,46 +255,50 @@ main() {
     pm2 stop "$PM2_NAME" || true
   fi
 
+  local backup=""
   NODE_ENV=production pm2 start "$DEPLOY_DIR/dist/index.js" --name "$PM2_NAME" --update-env || {
     log "Failed to start PM2 process for new release"
-    log "Attempting to restore previous backup"
-    if [ -n "$backup" ]; then
-      restore_backup "$backup"
-    fi
+    log "Attempting to restore previous release"
+    restore_previous_release "$backup" || true
     exit 1
   }
 
   # Wait for PM2 and then verify via PM2-managed logs and public health
   if ! wait_for_pm2; then
     log "PM2 failed to start new process after swap"
-    log "Attempting to restore previous backup"
-    if [ -n "$backup" ]; then
-      restore_backup "$backup"
-    fi
+    log "Attempting to restore previous release"
+    restore_previous_release "$backup" || true
     exit 1
   fi
 
-  # Rotate or archive the current PM2 out log so we only look at fresh logs for verification
-  if [ -f "$OUT_LOG" ]; then
-    mv "$OUT_LOG" "$OUT_LOG.$(timestamp).old" || true
+  rotate_pm2_log
+
+  if ! wait_for_db_verified_log; then
+    log "Database verification failed for PM2-managed process"
+    log "Attempting to restore previous release"
+    restore_previous_release "$backup" || true
+    exit 1
   fi
 
-  if ! wait_for_db_verified; then
-    log "Database verification failed for PM2-managed process"
-    log "Attempting to restore previous backup"
-    if [ -n "$backup" ]; then
-      restore_backup "$backup"
-    fi
+  if ! verify_database_from_release "$DEPLOY_DIR"; then
+    log "Database verification failed for the promoted release"
+    log "Attempting to restore previous release"
+    restore_previous_release "$backup" || true
     exit 1
   fi
 
   if ! check_health; then
     log "Health check failed for PM2-managed process"
-    log "Attempting torestore previous backup"
-    if [ -n "$backup" ]; then
-      restore_backup "$backup"
-    fi
+    log "Attempting to restore previous release"
+    restore_previous_release "$backup" || true
     exit 1
+  fi
+
+  log "Staged release verified. Creating backup of the previous deployment (if present)"
+  if [ -d "$DEPLOY_DIR.old" ] && [ "$(ls -A "$DEPLOY_DIR.old" 2>/dev/null || true)" ]; then
+    backup=$(create_backup_from_dir "$DEPLOY_DIR.old")
+  else
+    log "No existing deployment found; skipping backup creation"
   fi
 
   log "Deployment successful"
