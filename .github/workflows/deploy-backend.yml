@@ -44,33 +44,33 @@ jobs:
           JWT_EXPIRES_IN: ${{ secrets.JWT_EXPIRES_IN }}
         run: |
           python3 - <<'PY'
-import os
-from pathlib import Path
-required = [
-    'DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME', 'JWT_SECRET'
-]
-missing = [key for key in required if not os.environ.get(key)]
-if missing:
-    raise SystemExit('Missing required production secrets: ' + ', '.join(missing))
-ssl_key = os.environ.get('SSL_KEY_PATH') or '/etc/letsencrypt/live/dapi.cerbon.id/privkey.pem'
-ssl_cert = os.environ.get('SSL_CERT_PATH') or '/etc/letsencrypt/live/dapi.cerbon.id/fullchain.pem'
-ssl_ca = os.environ.get('SSL_CA_PATH') or '/etc/letsencrypt/live/dapi.cerbon.id/chain.pem'
-lines = [
-    'NODE_ENV=production',
-    'PORT=4000',
-    f'DB_HOST={os.environ["DB_HOST"]}',
-    f'DB_PORT={os.environ["DB_PORT"]}',
-    f'DB_USER={os.environ["DB_USER"]}',
-    f'DB_PASSWORD={os.environ["DB_PASSWORD"]}',
-    f'DB_NAME={os.environ["DB_NAME"]}',
-    f'SSL_KEY_PATH={ssl_key}',
-    f'SSL_CERT_PATH={ssl_cert}',
-    f'SSL_CA_PATH={ssl_ca}',
-    f'JWT_SECRET={os.environ["JWT_SECRET"]}',
-    f'JWT_EXPIRES_IN={os.environ.get("JWT_EXPIRES_IN", "1d")}',
-]
-Path('.env.production').write_text('\n'.join(lines) + '\n')
-PY
+            import os
+            from pathlib import Path
+            required = [
+                'DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME', 'JWT_SECRET'
+            ]
+            missing = [key for key in required if not os.environ.get(key)]
+            if missing:
+                raise SystemExit('Missing required production secrets: ' + ', '.join(missing))
+            ssl_key = os.environ.get('SSL_KEY_PATH') or '/etc/letsencrypt/live/dapi.cerbon.id/privkey.pem'
+            ssl_cert = os.environ.get('SSL_CERT_PATH') or '/etc/letsencrypt/live/dapi.cerbon.id/fullchain.pem'
+            ssl_ca = os.environ.get('SSL_CA_PATH') or '/etc/letsencrypt/live/dapi.cerbon.id/chain.pem'
+            lines = [
+                'NODE_ENV=production',
+                'PORT=4000',
+                f'DB_HOST={os.environ["DB_HOST"]}',
+                f'DB_PORT={os.environ["DB_PORT"]}',
+                f'DB_USER={os.environ["DB_USER"]}',
+                f'DB_PASSWORD={os.environ["DB_PASSWORD"]}',
+                f'DB_NAME={os.environ["DB_NAME"]}',
+                f'SSL_KEY_PATH={ssl_key}',
+                f'SSL_CERT_PATH={ssl_cert}',
+                f'SSL_CA_PATH={ssl_ca}',
+                f'JWT_SECRET={os.environ["JWT_SECRET"]}',
+                f'JWT_EXPIRES_IN={os.environ.get("JWT_EXPIRES_IN", "1d")}',
+            ]
+            Path('.env.production').write_text('\n'.join(lines) + '\n')
+          PY
 
       - name: Sync backend files to server
         run: |
