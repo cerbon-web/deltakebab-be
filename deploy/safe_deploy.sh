@@ -21,7 +21,17 @@ mkdir -p "$BACKUP_ROOT"
 rotate_backups() {
   local keep="$KEEP_BACKUPS"
   log "Rotating backups, keeping latest $keep"
-  ls -1dt "$BACKUP_ROOT"/* 2>/dev/null | tail -n +$((keep+1)) | xargs -r rm -rf
+  # Safely collect backup directories (handle empty backup dir without failing)
+  mapfile -t arr < <(ls -1dt "$BACKUP_ROOT"/* 2>/dev/null || true)
+  if [ ${#arr[@]} -le "$keep" ]; then
+    log "No old backups to remove"
+    return 0
+  fi
+  to_remove=( "${arr[@]:$keep}" )
+  for r in "${to_remove[@]}"; do
+    log "Removing old backup: $r"
+    rm -rf "$r"
+  done
 }
 
 # Create backup of current app
