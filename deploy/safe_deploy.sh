@@ -12,6 +12,10 @@ PM2_NAME=${PM2_NAME:-delta-be}
 PORT=${PORT:-4000}
 HEALTH_URL=${HEALTH_URL:-https://dapi.cerbon.id:${PORT}/api/health}
 
+# PM2 log paths
+PM2_LOG_DIR=${PM2_LOG_DIR:-"${PM2_HOME:-$HOME/.pm2}/logs"}
+OUT_LOG="$PM2_LOG_DIR/${PM2_NAME}-out.log"
+
 timestamp() { date -u +"%Y%m%dT%H%M%SZ"; }
 log() { echo "[$(timestamp)] $*"; }
 
@@ -75,12 +79,10 @@ wait_for_db_verified() {
   local retries=30
   local delay=2
   # Check PM2 out log file for the verification message instead of using `pm2 logs` (avoids streaming/EPIPE over SSH)
-  local pm2_log_dir="${PM2_HOME:-$HOME/.pm2}/logs"
-  local out_log="$pm2_log_dir/${PM2_NAME}-out.log"
-  log "Waiting for database verification in PM2 logs (up to $((retries*delay))s) checking $out_log"
+  log "Waiting for database verification in PM2 logs (up to $((retries*delay))s) checking $OUT_LOG"
   for i in $(seq 1 $retries); do
-    if [ -f "$out_log" ]; then
-      if tail -n 200 "$out_log" | grep -q "Database connection verified"; then
+    if [ -f "$OUT_LOG" ]; then
+      if tail -n 200 "$OUT_LOG" | grep -q "Database connection verified"; then
         log "Database connection verified by application logs"
         return 0
       fi
@@ -127,6 +129,20 @@ main() {
     # shellcheck source=/dev/null
     . "$DEPLOY_DIR/.env.production"
     set +a
+
+    # If DATABASE_URL is not provided directly, construct it from DB_* vars
+    if [ -z "${DATABASE_URL:-}" ]; then
+      if [ -n "${DB_HOST:-}" ] && [ -n "${DB_USER:-}" ] && [ -n "${DB_NAME:-}" ]; then
+        DB_PORT_VAL="${DB_PORT:-3306}"
+        export DATABASE_URL="mysql://${DB_USER}:${DB_PASSWORD:-}@${DB_HOST}:${DB_PORT_VAL}/${DB_NAME}"
+        log "Constructed DATABASE_URL from DB_* environment variables"
+      fi
+    fi
+  fi
+
+  # Rotate or archive the current PM2 out log so we only look at fresh logs for verification
+  if [ -f "$OUT_LOG" ]; then
+    mv "$OUT_LOG" "$OUT_LOG.$(timestamp).old" || true
   fi
 
   NODE_ENV=production pm2 restart "$PM2_NAME" --update-env || NODE_ENV=production pm2 start "$DEPLOY_DIR/dist/index.js" --name "$PM2_NAME" --update-env
