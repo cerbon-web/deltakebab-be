@@ -1,4 +1,3 @@
-import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
 import { PrismaClient } from "@prisma/client";
@@ -27,43 +26,341 @@ ensureDatabaseUrl();
 
 const prisma = new PrismaClient();
 
+type MenuSeedItem = {
+  name: string;
+  description: string;
+  prices: Record<string, number>;
+};
+
+type MenuSeedCategory = {
+  category: string;
+  items: MenuSeedItem[];
+};
+
+const menuSeedData: MenuSeedCategory[] = [
+  {
+    category: "ROLLO",
+    items: [
+      {
+        name: "ROLLO DELTA KEBAB",
+        description: "mięso, surówka, sosy",
+        prices: { małe: 17, średnie: 24, mega: 30 },
+      },
+      {
+        name: "ROLLO DELTA KEBAB Z SEREM",
+        description: "mięso, ser, surówka, sosy",
+        prices: { małe: 20, średnie: 26, mega: 32 },
+      },
+      {
+        name: "DELTA AMERYKAŃSKIE",
+        description: "mięso, frytki, sosy",
+        prices: { małe: 19, średnie: 25, mega: 31 },
+      },
+      {
+        name: "ROLLO DELTA SAMO MIĘSO",
+        description: "mięso, sosy",
+        prices: { małe: 23, średnie: 30, mega: 36 },
+      },
+      {
+        name: "SUPER ROLLO DELTA",
+        description: "mięso, ser, frytki, surówka, sosy",
+        prices: { małe: 23, średnie: 30 },
+      },
+      {
+        name: "SZPINAK ROLLO DELTA",
+        description: "mięso, szpinak, ser, sosy",
+        prices: { małe: 23, średnie: 30 },
+      },
+      {
+        name: "ROLLO WEGE",
+        description: "falafel, warzywa, sos",
+        prices: { małe: 15, średnie: 20, mega: 25 },
+      },
+      {
+        name: "SUPER MEGA ROLLO AMERYKAŃSKIE",
+        description: "2x mięso, ser, frytki, sosy",
+        prices: { mega: 43 },
+      },
+      {
+        name: "SUPER MEGA ROLLO Z SEREM",
+        description: "2x mięso, ser, surówka, sosy",
+        prices: { mega: 43 },
+      },
+      {
+        name: "ROLLO DELTA GREKO",
+        description: "mięso, sałata lodowa, czerwona cebula, oliwki, ser sałatkowy, sos łagodny",
+        prices: { małe: 22, średnie: 28 },
+      },
+      {
+        name: "ROLLO DELTA HOT SPICY",
+        description: "mięso, papryka mix, jalapeño, surówka, sos ostry",
+        prices: { małe: 22, średnie: 28 },
+      },
+      {
+        name: "ROLLO WRAP",
+        description: "mięso, polędwiczki, sałata lodowa, pekińska, sosy",
+        prices: { małe: 22, średnie: 28 },
+      },
+    ],
+  },
+  {
+    category: "TORTILLA",
+    items: [
+      {
+        name: "TORTILLA DELTA",
+        description: "mięso, surówka, ogórek, sosy",
+        prices: { małe: 20, średnie: 26, mega: 33 },
+      },
+      {
+        name: "TORTILLA DELTA Z SEREM",
+        description: "mięso, ser, surówka, ogórek, sosy",
+        prices: { małe: 21, średnie: 27, mega: 34 },
+      },
+      {
+        name: "TORTILLA AMERYKAŃSKA",
+        description: "mięso, frytki, sosy",
+        prices: { małe: 21, średnie: 27, mega: 34 },
+      },
+      {
+        name: "TORTILLA SAMO MIĘSO",
+        description: "mięso, sosy",
+        prices: { małe: 25, średnie: 30, mega: 37 },
+      },
+    ],
+  },
+  {
+    category: "TALERZ",
+    items: [
+      {
+        name: "TALERZ KEBAB",
+        description: "mięso, warzywa, frytki, sosy",
+        prices: { standard: 29 },
+      },
+      {
+        name: "SUPER TALERZ",
+        description: "mięso, warzywa, ser, frytki, sosy",
+        prices: { standard: 35 },
+      },
+      {
+        name: "MEGA TALERZ",
+        description: "2x mięso, warzywa, sosy + osobne frytki",
+        prices: { standard: 43 },
+      },
+      {
+        name: "TALERZ SAMO MIĘSO",
+        description: "mięso, frytki, sosy",
+        prices: { standard: 34 },
+      },
+      {
+        name: "TALERZ FALAFEL",
+        description: "falafele, warzywa, frytki, sosy",
+        prices: { standard: 22 },
+      },
+    ],
+  },
+  {
+    category: "BOX",
+    items: [
+      {
+        name: "KEBAB BOX",
+        description: "mięso, warzywa, frytki, sosy",
+        prices: { mały: 21, duży: 27 },
+      },
+      {
+        name: "BOX AMERYKAŃSKI",
+        description: "mięso, frytki, sosy",
+        prices: { mały: 24, duży: 30 },
+      },
+      {
+        name: "KIDS BOX",
+        description: "chicken nuggets 2 szt., chicken pops 4 szt., kulki warzywne 3 szt., frytki 80g, sos i napój",
+        prices: { mały: 19 },
+      },
+    ],
+  },
+  {
+    category: "BUŁKA",
+    items: [
+      {
+        name: "KEBAB W BUŁCE",
+        description: "bułka, mięso, warzywa, sosy",
+        prices: { mała: 22, średnia: 27, duża: 34 },
+      },
+      {
+        name: "AMERYKAŃSKA",
+        description: "bułka, mięso, frytki, sosy",
+        prices: { mała: 24, średnia: 30, duża: 37 },
+      },
+      {
+        name: "SUPER DELTA W BUŁCE",
+        description: "bułka, mięso, warzywa, ser, frytki, sosy",
+        prices: { mała: 27, średnia: 32, duża: 39 },
+      },
+      {
+        name: "BUŁKA SAMO MIĘSO",
+        description: "bułka, mięso, sosy",
+        prices: { mała: 28, średnia: 36 },
+      },
+    ],
+  },
+  {
+    category: "KAPSALON",
+    items: [
+      {
+        name: "KAPSALON",
+        description: "mięso, warzywa, pomidor, ogórek, frytki, ser, sos",
+        prices: { standard: 31 },
+      },
+    ],
+  },
+  {
+    category: "KURCZAK",
+    items: [
+      {
+        name: "DELTOPYCHA",
+        description: "polędwiczki z kurczaka 2 szt., popsy z kurczaka 10 szt., frytki, sos",
+        prices: { standard: 26 },
+      },
+      {
+        name: "CHICKEN STRIPS",
+        description: "polędwiczki z kurczaka 4 szt., frytki, sos",
+        prices: { standard: 24 },
+      },
+      {
+        name: "CHICKEN POPS",
+        description: "kawałki kurczaka w panierce ryżowej 10 szt., frytki, sos",
+        prices: { standard: 21 },
+      },
+    ],
+  },
+  {
+    category: "DODATKI",
+    items: [
+      {
+        name: "FRYTKI",
+        description: "",
+        prices: { małe: 9, duże: 17 },
+      },
+      {
+        name: "FRYTKI Z SEREM",
+        description: "",
+        prices: { małe: 12, duże: 19 },
+      },
+      {
+        name: "BAKLAWA",
+        description: "",
+        prices: { standard: 7 },
+      },
+      {
+        name: "DODATKOWE MIĘSO",
+        description: "",
+        prices: { standard: 8 },
+      },
+      {
+        name: "DODATKOWE WARZYWA",
+        description: "",
+        prices: { standard: 3 },
+      },
+      {
+        name: "DODATKOWY SER",
+        description: "",
+        prices: { standard: 3 },
+      },
+      {
+        name: "DODATKOWY SOS",
+        description: "czosnkowy, łagodny, ketchup, ostry, BBQ, koperkowy",
+        prices: { standard: 3 },
+      },
+      {
+        name: "KULKI WARZYWNE",
+        description: "kulki warzywne 10 szt., frytki, sos",
+        prices: { standard: 16 },
+      },
+    ],
+  },
+  {
+    category: "SAŁATKI",
+    items: [
+      {
+        name: "SAŁATKA Z KEBABEM",
+        description: "mięso, warzywa, sosy",
+        prices: { standard: 24 },
+      },
+      {
+        name: "CRISPY SALAD",
+        description: "stripsy z kurczaka 3 szt., warzywa, sosy",
+        prices: { standard: 22 },
+      },
+      {
+        name: "GRECKA",
+        description: "sałata lodowa, ogórek, pomidor, feta, oliwki, jalapeño, sosy",
+        prices: { standard: 16 },
+      },
+    ],
+  },
+  {
+    category: "NAPOJE",
+    items: [
+      {
+        name: "AYRAN",
+        description: "",
+        prices: { standard: 6 },
+      },
+      {
+        name: "MANGO DIMES",
+        description: "0,33L",
+        prices: { standard: 7 },
+      },
+      {
+        name: "PEPSI",
+        description: "",
+        prices: { "0,33L": 7, "0,5L": 9 },
+      },
+      {
+        name: "MIRINDA",
+        description: "",
+        prices: { "0,33L": 7, "0,5L": 9 },
+      },
+      {
+        name: "LIPTON",
+        description: "",
+        prices: { "0,33L": 7, "0,5L": 9 },
+      },
+      {
+        name: "MOUNTAIN DEW",
+        description: "",
+        prices: { "0,33L": 7, "0,5L": 9 },
+      },
+      {
+        name: "WODA",
+        description: "0,5L",
+        prices: { standard: 5 },
+      },
+      {
+        name: "OPAKOWANIE NA WYNOS",
+        description: "",
+        prices: { standard: 1.5 },
+      },
+      {
+        name: "REKLAMÓWKA",
+        description: "",
+        prices: { standard: 1 },
+      },
+    ],
+  },
+];
+
 async function shouldSeedDatabase(): Promise<boolean> {
   const branchMenuCount = await prisma.branchMenu.count();
   return branchMenuCount === 0;
 }
 
-function loadMenuSeedData(): any {
-  const candidates = [
-    path.resolve(process.cwd(), "menu", "menu_response.json"),
-    path.resolve(process.cwd(), "..", "menu", "menu_response.json"),
-    path.resolve(__dirname, "..", "..", "menu", "menu_response.json"),
-    path.resolve(__dirname, "..", "..", "..", "menu", "menu_response.json"),
-    path.resolve("/menu", "menu_response.json"),
-  ];
-
-  const menuPath = candidates.find((candidate) => fs.existsSync(candidate));
-  if (!menuPath) {
-    throw new Error(`Could not find menu_response.json. Tried: ${candidates.join(", ")}`);
-  }
-
-  const raw = fs.readFileSync(menuPath, "utf8").replace(/^\uFEFF/, "");
-  return JSON.parse(raw);
-}
-
-async function ensureBranchMenuSeed(branchId: string, branchName: string, menuSeedData: any) {
+async function ensureBranchMenuSeed(branchId: string, branchName: string) {
   const existingBranchMenu = await prisma.branchMenu.findFirst({
     where: { branchId, name: "Main Menu" },
   });
 
-  const rolloCategoryNames = ["Rollo", "Rollo ", "Rollos"];
-  const pepsiItemNames = ["PEPSI", "Pepsi"];
   const sizeGroupName = "Default";
-  const sizeNames = ["Małe", "Średnie", "Duże"];
-  const sizeValues = ["male", "srednie", "duze"];
-  const sizePricesByItem: Record<string, string[]> = {
-    PEPSI: ["4.50", "6.00", "8.50"],
-    Pepsi: ["4.50", "6.00", "8.50"],
-  };
 
   const branchMenu = existingBranchMenu
     ? await prisma.branchMenu.update({
@@ -89,46 +386,16 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string, menuSe
     });
   }
 
-  const sizeOptions: Array<{ id: string; name: string; value: string }> = [];
-  for (const [index, sizeName] of sizeNames.entries()) {
-    let sizeOption = await prisma.sizeOption.findFirst({
-      where: { sizeGroupId: sizeGroup.id, name: sizeName },
-    });
-
-    if (!sizeOption) {
-      sizeOption = await prisma.sizeOption.create({
-        data: {
-          sizeGroupId: sizeGroup.id,
-          name: sizeName,
-          value: sizeValues[index],
-          displayOrder: index,
-          active: true,
-        },
-      });
-    } else {
-      await prisma.sizeOption.update({
-        where: { id: sizeOption.id },
-        data: {
-          value: sizeValues[index],
-          displayOrder: index,
-          active: true,
-        },
-      });
-    }
-
-    sizeOptions.push({ id: sizeOption.id, name: sizeOption.name, value: sizeOption.value ?? sizeValues[index] });
-  }
-
-  for (const [categoryIndex, categorySeed] of (menuSeedData.categories || []).entries()) {
+  for (const [categoryIndex, categorySeed] of menuSeedData.entries()) {
     let category = await prisma.category.findFirst({
-      where: { menuId: branchMenu.id, name: categorySeed.name },
+      where: { menuId: branchMenu.id, name: categorySeed.category },
     });
 
     if (!category) {
       category = await prisma.category.create({
         data: {
           menuId: branchMenu.id,
-          name: categorySeed.name,
+          name: categorySeed.category,
           icon: "restaurant",
           displayOrder: categoryIndex,
           active: true,
@@ -144,13 +411,10 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string, menuSe
       });
     }
 
-    for (const [itemIndex, itemSeed] of (categorySeed.items || []).entries()) {
+    for (const [itemIndex, itemSeed] of categorySeed.items.entries()) {
       let menuItem = await prisma.menuItem.findFirst({
         where: { categoryId: category.id, name: itemSeed.name },
       });
-
-      const fallbackPrice = 10 + itemIndex * 2;
-      const itemPrice = Number(itemSeed.prices?.[0]?.price ?? fallbackPrice);
 
       if (!menuItem) {
         menuItem = await prisma.menuItem.create({
@@ -158,7 +422,7 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string, menuSe
             categoryId: category.id,
             name: itemSeed.name,
             description: itemSeed.description ?? null,
-            imageUrl: itemSeed.imageUrl ?? null,
+            displayOrder: itemIndex,
             active: true,
           },
         });
@@ -167,7 +431,30 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string, menuSe
           where: { id: menuItem.id },
           data: {
             description: itemSeed.description ?? null,
-            imageUrl: itemSeed.imageUrl ?? null,
+            displayOrder: itemIndex,
+            active: true,
+          },
+        });
+      }
+
+      let itemSizeGroup = await prisma.itemSizeGroup.findFirst({
+        where: { menuItemId: menuItem.id, sizeGroupId: sizeGroup.id },
+      });
+
+      if (!itemSizeGroup) {
+        itemSizeGroup = await prisma.itemSizeGroup.create({
+          data: {
+            menuItemId: menuItem.id,
+            sizeGroupId: sizeGroup.id,
+            displayOrder: 0,
+            active: true,
+          },
+        });
+      } else {
+        await prisma.itemSizeGroup.update({
+          where: { id: itemSizeGroup.id },
+          data: {
+            displayOrder: 0,
             active: true,
           },
         });
@@ -198,59 +485,49 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string, menuSe
         });
       }
 
-      const shouldAssignSizes = rolloCategoryNames.includes(categorySeed.name) || pepsiItemNames.includes(itemSeed.name);
+      const existingSizes = await prisma.branchMenuItemSize.findMany({
+        where: { branchMenuItemId: branchMenuItem.id },
+      });
 
-      if (shouldAssignSizes) {
-        const priceOverrides = sizePricesByItem[itemSeed.name] ?? [String(itemPrice), String(itemPrice + 2), String(itemPrice + 4)];
+      for (const existingSize of existingSizes) {
+        await prisma.branchMenuItemSize.delete({ where: { id: existingSize.id } });
+      }
 
-        for (const [index, sizeOption] of sizeOptions.entries()) {
-          const sizePrice = Number(priceOverrides[index] ?? itemPrice);
-          let branchMenuItemSize = await prisma.branchMenuItemSize.findFirst({
-            where: { branchMenuItemId: branchMenuItem.id, sizeOptionId: sizeOption.id },
-          });
-
-          if (!branchMenuItemSize) {
-            await prisma.branchMenuItemSize.create({
-              data: {
-                branchMenuItemId: branchMenuItem.id,
-                sizeOptionId: sizeOption.id,
-                price: sizePrice,
-                available: true,
-              },
-            });
-          } else {
-            await prisma.branchMenuItemSize.update({
-              where: { id: branchMenuItemSize.id },
-              data: {
-                price: sizePrice,
-                available: true,
-              },
-            });
-          }
-        }
-      } else {
-        let branchMenuItemSize = await prisma.branchMenuItemSize.findFirst({
-          where: { branchMenuItemId: branchMenuItem.id, sizeOptionId: sizeOptions[0]?.id },
+      const priceEntries = Object.entries(itemSeed.prices ?? {});
+      for (const [sizeIndex, [sizeName, sizePrice]] of priceEntries.entries()) {
+        let sizeOption = await prisma.sizeOption.findFirst({
+          where: { sizeGroupId: sizeGroup.id, name: sizeName },
         });
 
-        if (branchMenuItemSize) {
-          await prisma.branchMenuItemSize.delete({ where: { id: branchMenuItemSize.id } });
-        }
-
-        let defaultSize = await prisma.branchMenuItemSize.findFirst({
-          where: { branchMenuItemId: branchMenuItem.id, sizeOptionId: sizeOptions[0]?.id },
-        });
-
-        if (!defaultSize) {
-          await prisma.branchMenuItemSize.create({
+        if (!sizeOption) {
+          sizeOption = await prisma.sizeOption.create({
             data: {
-              branchMenuItemId: branchMenuItem.id,
-              sizeOptionId: sizeOptions[0]?.id,
-              price: itemPrice,
-              available: true,
+              sizeGroupId: sizeGroup.id,
+              name: sizeName,
+              value: sizeName,
+              displayOrder: sizeIndex,
+              active: true,
+            },
+          });
+        } else {
+          await prisma.sizeOption.update({
+            where: { id: sizeOption.id },
+            data: {
+              value: sizeName,
+              displayOrder: sizeIndex,
+              active: true,
             },
           });
         }
+
+        await prisma.branchMenuItemSize.create({
+          data: {
+            branchMenuItemId: branchMenuItem.id,
+            sizeOptionId: sizeOption.id,
+            price: Number(sizePrice),
+            available: true,
+          },
+        });
       }
     }
   }
@@ -577,9 +854,8 @@ async function main() {
     createdBranches.push({ id: seededBranch.id, name: seededBranch.name });
   }
 
-  const menuSeedData = loadMenuSeedData();
   for (const branchSeed of createdBranches) {
-    await ensureBranchMenuSeed(branchSeed.id, branchSeed.name, menuSeedData);
+    await ensureBranchMenuSeed(branchSeed.id, branchSeed.name);
   }
 
   // ============================================================================
@@ -769,7 +1045,7 @@ async function main() {
   console.log(`   - Roles: ${roleNames.length}`);
   console.log("   - Users: 4 (admin, kitchen, driver, customer)");
   console.log("   - Restaurant & Branch: 1 each");
-  console.log("   - Branch menus: seeded from the local menu JSON");
+  console.log("   - Branch menus: seeded from the embedded menu catalog");
   console.log("   - Sample Order: 1");
 
   console.log("\n🔐 Test Credentials:");
