@@ -35,7 +35,9 @@ async function shouldSeedDatabase(): Promise<boolean> {
 function loadMenuSeedData(): any {
   const candidates = [
     path.resolve(process.cwd(), "menu", "menu_response.json"),
+    path.resolve(process.cwd(), "..", "menu", "menu_response.json"),
     path.resolve(__dirname, "..", "..", "menu", "menu_response.json"),
+    path.resolve(__dirname, "..", "..", "..", "menu", "menu_response.json"),
     path.resolve("/menu", "menu_response.json"),
   ];
 
