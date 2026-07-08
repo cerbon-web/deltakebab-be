@@ -6,11 +6,16 @@ until nc -z "${DB_HOST:-db}" "${DB_PORT:-3306}"; do
   sleep 2
 done
 
-echo "Preparing Prisma client and schema..."
-npm run db:prepare
+echo "Checking database state..."
+if node scripts/check-db-empty.js; then
+  echo "Database is empty. Preparing Prisma client and schema..."
+  npm run db:prepare
 
-echo "Applying database seed..."
-npm run db:seed
+  echo "Applying database seed..."
+  npm run db:seed
+else
+  echo "Database already has tables. Skipping Prisma prepare and seed."
+fi
 
 echo "Starting backend..."
 # When entrypoint already ran the Prisma seed, prevent the app bootstrap from running it again.
