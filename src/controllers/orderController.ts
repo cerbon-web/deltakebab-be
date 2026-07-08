@@ -18,12 +18,13 @@ export const getOrderController = async (req: Request, res: Response) => {
 };
 
 export const updateOrderStatusController = async (req: Request, res: Response) => {
-  const updated = await updateOrderStatus(req.params.id, req.body.status, req.body.actorType || 'SYSTEM', req.body.actorId || null, req.body.comment);
+  const updated = await updateOrderStatus(req.params.id, req.body.status, req.body.actorId || null, req.body.actorType || 'SYSTEM', req.body.comment);
   res.json(updated);
 };
 
 export const restaurantOrdersController = async (req: Request, res: Response) => {
-  const orders = await listRestaurantOrders(String(req.query.restaurantId || ''));
+  const branchId = String(req.query.branchId || req.query.restaurantId || '');
+  const orders = await listRestaurantOrders(branchId);
   res.json(orders);
 };
 

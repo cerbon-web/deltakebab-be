@@ -14,7 +14,7 @@
     "lint": "eslint . --ext .ts",
     "migrate": "npx prisma migrate dev",
     "migrate:reset": "npx prisma migrate reset --force",
-    "db:prepare": "node scripts/run-prisma.js generate --schema=./prisma/schema.prisma && node scripts/run-prisma.js db push && node scripts/run-prisma.js db seed",
+    "db:prepare": "node scripts/run-prisma.js generate --schema=./prisma/schema.prisma && node scripts/run-prisma.js db push --skip-generate",
     "db:seed": "node scripts/run-prisma.js db seed",
     "verify:db-utils": "node scripts/verify-db-utils.js"
   },

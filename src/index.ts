@@ -73,7 +73,9 @@ void verifyDatabaseConnection().then(connected => {
   }
 });
 
-runSeedIfNeeded();
+if (!process.env.SKIP_PRISMA_SEED) {
+  runSeedIfNeeded();
+}
 
 server.listen(config.port, () => {
   logger.info(`Server listening on port ${config.port}`);

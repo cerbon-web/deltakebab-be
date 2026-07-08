@@ -7,9 +7,17 @@ const ORDER_STATUSES = ['NEW', 'ACCEPTED', 'PREPARING', 'READY_FOR_PICKUP', 'PIC
 export const createOrder = async (payload: any) => {
   const { branchId, customerId, guestName, guestPhone, orderType, items, notes, street, buildingNumber, apartmentNumber, floor, city, postalCode, latitude, longitude, accessNotes } = payload;
 
-  // Calculate totals
+  const branch = await prisma.branch.findUnique({
+    where: { id: branchId },
+    include: { deliveryRules: true }
+  });
+
+  if (!branch) {
+    throw new Error('Branch not found');
+  }
+
   const subtotal = items.reduce((sum: number, item: any) => sum + Number(item.unitPrice) * item.quantity, 0);
-  const deliveryFee = orderType === 'DELIVERY' ? 5.0 : null; // From delivery rules
+  const deliveryFee = orderType === 'DELIVERY' ? Number(branch.deliveryRules?.baseDeliveryFee ?? 0) : null;
   const total = orderType === 'DELIVERY' ? subtotal + (deliveryFee || 0) : subtotal;
 
   const order = await prisma.order.create({
@@ -34,8 +42,8 @@ export const createOrder = async (payload: any) => {
       items: {
         createMany: {
           data: items.map((item: any) => ({
-            itemName: item.itemName,
-            sizeName: item.sizeName,
+            itemName: item.itemName || item.name || 'Item',
+            sizeName: item.sizeName || item.size || null,
             quantity: item.quantity,
             unitPrice: item.unitPrice,
             notes: item.notes
@@ -69,8 +77,7 @@ export const getOrderById = async (id: string) => {
       customer: true,
       branch: true,
       driverAssignment: true,
-      chat: true,
-      payment: true
+      chat: true
     }
   });
 

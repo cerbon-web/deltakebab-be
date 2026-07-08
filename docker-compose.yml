@@ -37,6 +37,7 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
+      - ../menu:/menu
 
 volumes:
   mysql-data:

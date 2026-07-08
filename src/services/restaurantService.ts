@@ -4,10 +4,16 @@ export const getRestaurants = async () => {
   return prisma.restaurant.findMany({
     include: {
       info: true,
-      hours: true,
-      deliveryRules: true,
-      branches: true
-    }
+      branches: {
+        where: { active: true },
+        include: {
+          hours: true,
+          deliveryRules: true
+        },
+        orderBy: { name: 'asc' }
+      }
+    },
+    orderBy: { name: 'asc' }
   });
 };
 
@@ -22,16 +28,19 @@ export const getNearestRestaurants = async (lat: string, lng: string) => {
   const restaurants = await prisma.restaurant.findMany({
     include: {
       info: true,
-      hours: true,
-      deliveryRules: true,
-      branches: true
+      branches: {
+        where: { active: true },
+        include: {
+          hours: true,
+          deliveryRules: true
+        }
+      }
     }
   });
 
-  // Haversine formula to compute distance in kilometers
   const haversine = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const toRad = (v: number) => (v * Math.PI) / 180;
-    const R = 6371; // km
+    const R = 6371;
     const dLat = toRad(lat2 - lat1);
     const dLon = toRad(lon2 - lon1);
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
@@ -42,14 +51,14 @@ export const getNearestRestaurants = async (lat: string, lng: string) => {
   };
 
   const withDistances = restaurants.map((restaurant) => {
-    const branches = (restaurant.branches || []).map((b: any) => {
-      const bl = b.latitude !== null && b.latitude !== undefined ? Number(b.latitude) : null;
-      const br = b.longitude !== null && b.longitude !== undefined ? Number(b.longitude) : null;
-      const distance_km = (bl !== null && br !== null) ? haversine(latitude, longitude, bl, br) : null;
-      return { ...b, distance_km };
+    const branches = (restaurant.branches || []).map((branch: any) => {
+      const branchLat = branch.latitude !== null && branch.latitude !== undefined ? Number(branch.latitude) : null;
+      const branchLng = branch.longitude !== null && branch.longitude !== undefined ? Number(branch.longitude) : null;
+      const distance_km = branchLat !== null && branchLng !== null ? haversine(latitude, longitude, branchLat, branchLng) : null;
+      return { ...branch, distance_km };
     });
 
-    const valid = branches.map((b: any) => b.distance_km).filter((d: any) => d !== null && d !== undefined);
+    const valid = branches.map((branch: any) => branch.distance_km).filter((distance: any) => distance !== null && distance !== undefined);
     const min = valid.length > 0 ? Math.min(...valid) : null;
 
     return {
@@ -74,9 +83,14 @@ export const getRestaurantById = async (id: string) => {
     where: { id },
     include: {
       info: true,
-      hours: true,
-      deliveryRules: true,
-      branches: true
+      branches: {
+        where: { active: true },
+        include: {
+          hours: true,
+          deliveryRules: true
+        },
+        orderBy: { name: 'asc' }
+      }
     }
   });
 };

@@ -1,48 +1,96 @@
 import { prisma } from '../database/prisma';
 
-export const getMenuByRestaurant = async (restaurantId: string) => {
-  const restaurant = await prisma.restaurant.findUnique({
-    where: { id: restaurantId },
+export const getBranchMenu = async (branchId: string) => {
+  const branch = await prisma.branch.findUnique({
+    where: { id: branchId },
     include: {
-      branches: {
-        where: { active: true },
-        orderBy: { name: 'asc' },
-        take: 1
-      }
+      restaurant: true,
+      hours: true,
+      deliveryRules: true
     }
   });
 
-  const branchId = restaurant?.branches?.[0]?.id;
+  if (!branch) {
+    return null;
+  }
 
-  const categories = await prisma.category.findMany({
-    where: { active: true },
-    orderBy: { name: 'asc' },
+  const branchMenu = await prisma.branchMenu.findFirst({
+    where: { branchId, active: true },
     include: {
-      items: {
+      categories: {
         where: { active: true },
-        orderBy: { name: 'asc' },
+        orderBy: { displayOrder: 'asc' },
         include: {
-          prices: {
-            where: branchId ? { branchId } : undefined,
-            orderBy: { validFrom: 'desc' }
+          items: {
+            where: { active: true },
+            orderBy: { name: 'asc' }
           }
         }
       }
     }
   });
 
+  if (!branchMenu) {
+    return {
+      branch,
+      menu: null,
+      categories: []
+    };
+  }
+
+  const branchMenuItems = await prisma.branchMenuItem.findMany({
+    where: { branchMenuId: branchMenu.id },
+    include: {
+      sizes: {
+        where: { available: true },
+        include: { sizeOption: true },
+        orderBy: { sizeOption: { displayOrder: 'asc' } }
+      }
+    }
+  });
+
+  const branchMenuItemMap = new Map(branchMenuItems.map((item) => [item.menuItemId, item]));
+
+  const categories = (branchMenu.categories || []).map((category) => ({
+    id: category.id,
+    name: category.name,
+    icon: category.icon,
+    items: (category.items || []).map((menuItem) => {
+      const branchMenuItem = branchMenuItemMap.get(menuItem.id);
+      const sizes = (branchMenuItem?.sizes || []).map((size) => ({
+        id: size.id,
+        name: size.sizeOption.name,
+        price: Number(size.price),
+        available: size.available
+      }));
+
+      return {
+        id: menuItem.id,
+        name: branchMenuItem?.nameOverride || menuItem.name,
+        description: branchMenuItem?.descriptionOverride || menuItem.description,
+        imageUrl: menuItem.imageUrl,
+        available: branchMenuItem?.available ?? true,
+        sizes
+      };
+    })
+  }));
+
   const items = categories.flatMap((category) =>
-    (category.items || []).map((item) => ({
+    category.items.map((item) => ({
       ...item,
+      category_id: category.id,
       category_name: category.name,
-      price: Number(item.prices?.[0]?.price ?? 0),
+      price: Number(item.sizes?.[0]?.price ?? 0),
       ingredients: item.description ?? ''
     }))
   );
 
   return {
-    restaurantId,
+    branch,
+    menu: branchMenu,
     categories,
     items
   };
 };
+
+export const getMenuByRestaurant = getBranchMenu;

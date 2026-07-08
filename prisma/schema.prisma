@@ -3,9 +3,7 @@
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "debian-openssl-3.0.x"]
-  // Force output into the project's node_modules so hosted `npx prisma generate`
-  // produces a client inside the deployment folder instead of a global path.
-  output = "../node_modules/.prisma/client"
+  output        = "../node_modules/.prisma/client"
 }
 
 datasource db {
@@ -18,27 +16,26 @@ datasource db {
 // ============================================================================
 
 model User {
-  id                String   @id @default(cuid())
-  name              String
-  email             String   @unique
-  phone             String?
-  passwordHash      String?
-  authProvider      String   @default("NATIVE") // NATIVE, GOOGLE, GITHUB
-  providerId        String?
-  isBlocked         Boolean  @default(false)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  phone         String?
+  passwordHash  String?
+  authProvider  String   @default("NATIVE") // NATIVE, GOOGLE, GITHUB
+  providerId    String?
+  isBlocked     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  // Relations
-  roles             UserRole[]
-  restaurantStaff   RestaurantStaff[]
-  addresses         CustomerAddress[]
-  orders            Order[]
-  driverProfile     DriverProfile?
-  sentMessages      Message[]
-  statusHistories   OrderStatusHistory[]
-  orderEvents       OrderEvent[]
-  notifications     Notification[]
+  roles           UserRole[]
+  restaurantStaff RestaurantStaff[]
+  addresses       CustomerAddress[]
+  orders          Order[]
+  driverProfile   DriverProfile?
+  sentMessages    Message[]
+  statusHistories OrderStatusHistory[]
+  orderEvents     OrderEvent[]
+  notifications   Notification[]
 
   @@index([email])
   @@index([phone])
@@ -49,8 +46,7 @@ model Role {
   name      String   @unique // SUPER_ADMIN, RESTAURANT_ADMIN, KITCHEN, DRIVER, REPORTER, CUSTOMER
   createdAt DateTime @default(now())
 
-  // Relations
-  users     UserRole[]
+  users UserRole[]
 }
 
 model UserRole {
@@ -59,9 +55,8 @@ model UserRole {
   roleId    String
   createdAt DateTime @default(now())
 
-  // Relations
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@unique([userId, roleId])
   @@index([userId])
@@ -79,50 +74,46 @@ model Restaurant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relations
-  branches              Branch[]
-  info                  RestaurantInfo?
-  hours                 RestaurantHours[]
-  deliveryRules         RestaurantDeliveryRules?
-  itemOverrides         RestaurantItemOverride[]
+  branches Branch[]
+  info     RestaurantInfo?
 
   @@index([active])
 }
 
 model Branch {
-  id              String   @id @default(cuid())
-  restaurantId    String
-  name            String
-  street          String
-  buildingNumber  String
-  city            String
-  postalCode      String
-  latitude        Decimal? @db.Decimal(10, 8)
-  longitude       Decimal? @db.Decimal(11, 8)
-  phone           String?
-  active          Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(cuid())
+  restaurantId   String
+  name           String
+  street         String
+  buildingNumber String
+  city           String
+  postalCode     String
+  latitude       Decimal? @db.Decimal(10, 8)
+  longitude      Decimal? @db.Decimal(11, 8)
+  phone          String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  // Relations
-  restaurant      Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  staff           RestaurantStaff[]
-  itemPrices      ItemPrice[]
-  orders          Order[]
+  restaurant     Restaurant          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  staff          RestaurantStaff[]
+  menus          BranchMenu[]
+  hours          BranchHours[]
+  deliveryRules  BranchDeliveryRule?
+  orders         Order[]
 
   @@index([restaurantId])
   @@index([active])
 }
 
 model RestaurantStaff {
-  id          String   @id @default(cuid())
-  userId      String
-  branchId    String
-  assignedAt  DateTime @default(now())
+  id         String   @id @default(cuid())
+  userId     String
+  branchId   String
+  assignedAt DateTime @default(now())
 
-  // Relations
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  branch      Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
 
   @@unique([userId, branchId])
   @@index([userId])
@@ -130,125 +121,186 @@ model RestaurantStaff {
 }
 
 model RestaurantInfo {
-  id              String   @id @default(cuid())
-  restaurantId    String   @unique
-  packagingFee    Decimal  @default(0.00) @db.Decimal(10, 2)
-  plasticBagFee   Decimal  @default(0.00) @db.Decimal(10, 2)
-  updatedAt       DateTime @updatedAt
-
-  // Relations
-  restaurant      Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-
-  @@index([restaurantId])
-}
-
-model RestaurantHours {
   id            String   @id @default(cuid())
-  restaurantId  String
-  dayRange      Int      // 0-6 for Monday-Sunday
-  openTime      String   // HH:mm format
-  closeTime     String   // HH:mm format
+  restaurantId  String   @unique
+  packagingFee  Decimal  @default(0.00) @db.Decimal(10, 2)
+  plasticBagFee Decimal  @default(0.00) @db.Decimal(10, 2)
+  updatedAt     DateTime @updatedAt
 
-  // Relations
-  restaurant    Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
-  @@unique([restaurantId, dayRange])
   @@index([restaurantId])
 }
 
-model RestaurantDeliveryRules {
-  id                  String   @id @default(cuid())
-  restaurantId        String   @unique
-  minOrderValue       Decimal  @default(0.00) @db.Decimal(10, 2)
-  minDeliveryDistance Decimal  @default(0.00) @db.Decimal(10, 2)
-  maxDeliveryDistance Decimal  @default(100.00) @db.Decimal(10, 2)
-  baseFee             Decimal  @default(0.00) @db.Decimal(10, 2)
-  perKmFee            Decimal  @default(0.00) @db.Decimal(10, 2)
+model BranchHours {
+  id          String   @id @default(cuid())
+  branchId    String
+  dayOfWeek   Int      // 0-6 for Monday-Sunday
+  openTime    String   // HH:mm format
+  closeTime   String   // HH:mm format
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  // Relations
-  restaurant          Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
 
-  @@index([restaurantId])
+  @@unique([branchId, dayOfWeek])
+  @@index([branchId])
+}
+
+model BranchDeliveryRule {
+  id                    String   @id @default(cuid())
+  branchId              String   @unique
+  minimumOrderValue     Decimal  @default(0.00) @db.Decimal(10, 2)
+  maximumDeliveryDistance Decimal  @default(100.00) @db.Decimal(10, 2)
+  baseDeliveryFee       Decimal  @default(0.00) @db.Decimal(10, 2)
+  perKmFee              Decimal  @default(0.00) @db.Decimal(10, 2)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@index([branchId])
 }
 
 // ============================================================================
 // MENU SYSTEM
 // ============================================================================
 
-model Category {
+model BranchMenu {
   id        String   @id @default(cuid())
-  name      String   @unique
+  branchId  String
+  name      String   @default("Main Menu")
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relations
-  items     Item[]
+  branch          Branch           @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  categories      Category[]
+  branchMenuItems BranchMenuItem[]
 
+  @@index([branchId])
   @@index([active])
 }
 
-model Item {
+model Category {
+  id            String   @id @default(cuid())
+  menuId        String
+  name          String
+  icon          String?
+  displayOrder  Int      @default(0)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  menu  BranchMenu @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  items MenuItem[]
+
+  @@index([menuId])
+  @@index([active])
+}
+
+model MenuItem {
   id          String   @id @default(cuid())
   categoryId  String
   name        String
   description String?
+  imageUrl    String?
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // Relations
-  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  prices      ItemPrice[]
-  overrides   RestaurantItemOverride[]
+  category        Category         @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  branchMenuItems BranchMenuItem[]
+  itemSizeGroups  ItemSizeGroup[]
 
   @@index([categoryId])
   @@index([active])
 }
 
-model Size {
+model SizeGroup {
   id        String   @id @default(cuid())
-  name      String   @unique
+  name      String
+  unit      String?
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  options        SizeOption[]
+  itemSizeGroups ItemSizeGroup[]
 
   @@index([active])
 }
 
-model ItemPrice {
-  id        String   @id @default(cuid())
-  itemId    String
-  branchId  String
-  price     Decimal  @db.Decimal(10, 2)
-  validFrom DateTime
-  validTo   DateTime?
-  createdAt DateTime @default(now())
+model SizeOption {
+  id            String   @id @default(cuid())
+  sizeGroupId   String
+  name          String
+  value         String?
+  displayOrder  Int      @default(0)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  // Relations
-  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  sizeGroup         SizeGroup          @relation(fields: [sizeGroupId], references: [id], onDelete: Cascade)
+  branchMenuItemSizes BranchMenuItemSize[]
 
-  @@index([itemId])
-  @@index([branchId])
-  @@index([validFrom])
-  @@index([validTo])
+  @@index([sizeGroupId])
+  @@index([active])
 }
 
-model RestaurantItemOverride {
-  id          String   @id @default(cuid())
-  restaurantId String
-  itemId      String
-  available   Boolean  @default(true)
-  specialPrice Decimal?  @db.Decimal(10, 2)
-  notes       String?
+model ItemSizeGroup {
+  id            String   @id @default(cuid())
+  menuItemId    String
+  sizeGroupId   String
+  active        Boolean  @default(true)
+  displayOrder  Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  // Relations
-  restaurant  Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  item        Item       @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  menuItem  MenuItem  @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  sizeGroup SizeGroup @relation(fields: [sizeGroupId], references: [id], onDelete: Cascade)
 
-  @@unique([restaurantId, itemId])
-  @@index([restaurantId])
-  @@index([itemId])
+  @@unique([menuItemId, sizeGroupId])
+  @@index([menuItemId])
+  @@index([sizeGroupId])
+}
+
+model BranchMenuItem {
+  id                    String   @id @default(cuid())
+  branchMenuId          String
+  menuItemId            String
+  available             Boolean  @default(true)
+  nameOverride          String?
+  descriptionOverride   String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  branchMenu BranchMenu          @relation(fields: [branchMenuId], references: [id], onDelete: Cascade)
+  menuItem   MenuItem            @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  sizes      BranchMenuItemSize[]
+
+  @@unique([branchMenuId, menuItemId])
+  @@index([branchMenuId])
+  @@index([menuItemId])
+  @@index([available])
+}
+
+model BranchMenuItemSize {
+  id                String   @id @default(cuid())
+  branchMenuItemId  String
+  sizeOptionId      String
+  price             Decimal  @db.Decimal(10, 2)
+  available         Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  branchMenuItem BranchMenuItem @relation(fields: [branchMenuItemId], references: [id], onDelete: Cascade)
+  sizeOption     SizeOption     @relation(fields: [sizeOptionId], references: [id], onDelete: Cascade)
+
+  @@unique([branchMenuItemId, sizeOptionId])
+  @@index([branchMenuItemId])
+  @@index([sizeOptionId])
+  @@index([available])
 }
 
 // ============================================================================
@@ -272,8 +324,7 @@ model CustomerAddress {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  // Relations
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([city])
@@ -291,32 +342,30 @@ model Order {
   status              String   @default("NEW") // NEW, ACCEPTED, PREPARING, READY_FOR_PICKUP, PICKED_UP, IN_DELIVERY, DELIVERED, FAILED_DELIVERY, CANCELLED
   totalPrice          Decimal  @db.Decimal(10, 2)
   deliveryFee         Decimal? @db.Decimal(10, 2)
-  
-  // Snapshot fields - captured at order time
-  customerName        String
-  customerPhone       String
-  street              String?
-  buildingNumber      String?
-  apartmentNumber     String?
-  floor               String?
-  city                String?
-  postalCode          String?
-  latitude            Decimal? @db.Decimal(10, 8)
-  longitude           Decimal? @db.Decimal(11, 8)
-  accessNotes         String?
-  
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
 
-  // Relations
-  customer            User     @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  branch              Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  items               OrderItem[]
-  statusHistory       OrderStatusHistory[]
-  events              OrderEvent[]
-  driverAssignment    DriverAssignment?
-  chat                Chat?
-  payment             Payment?
+  customerName    String
+  customerPhone   String
+  street          String?
+  buildingNumber  String?
+  apartmentNumber String?
+  floor           String?
+  city            String?
+  postalCode      String?
+  latitude        Decimal? @db.Decimal(10, 8)
+  longitude       Decimal? @db.Decimal(11, 8)
+  accessNotes     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customer         User                 @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  branch           Branch               @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  items            OrderItem[]
+  statusHistory    OrderStatusHistory[]
+  events           OrderEvent[]
+  driverAssignment DriverAssignment?
+  chat             Chat?
+  payment          Payment?
 
   @@index([customerId])
   @@index([branchId])
@@ -334,8 +383,7 @@ model OrderItem {
   notes     String?
   createdAt DateTime @default(now())
 
-  // Relations
-  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
 }
@@ -349,9 +397,8 @@ model OrderStatusHistory {
   reason          String?
   createdAt       DateTime @default(now())
 
-  // Relations
-  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  changedByUser   User?    @relation(fields: [changedByUserId], references: [id], onDelete: SetNull)
+  order         Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  changedByUser User? @relation(fields: [changedByUserId], references: [id], onDelete: SetNull)
 
   @@index([orderId])
   @@index([createdAt])
@@ -366,9 +413,8 @@ model OrderEvent {
   metadata  Json?
   createdAt DateTime @default(now())
 
-  // Relations
-  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
   @@index([eventType])
@@ -387,25 +433,23 @@ model DriverProfile {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // Relations
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   assignments DriverAssignment[]
 
   @@index([active])
 }
 
 model DriverAssignment {
-  id              String   @id @default(cuid())
-  orderId         String   @unique
-  driverId        String
-  assignedAt      DateTime @default(now())
-  pickedUpAt      DateTime?
+  id                String    @id @default(cuid())
+  orderId           String    @unique
+  driverId          String
+  assignedAt        DateTime  @default(now())
+  pickedUpAt        DateTime?
   deliveryStartedAt DateTime?
-  completedAt     DateTime?
+  completedAt       DateTime?
 
-  // Relations
-  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  driver          DriverProfile @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  order  Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  driver DriverProfile @relation(fields: [driverId], references: [id], onDelete: Cascade)
 
   @@index([driverId])
   @@index([orderId])
@@ -421,9 +465,8 @@ model Chat {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relations
-  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  messages  Message[]
+  order    Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  messages Message[]
 
   @@index([orderId])
 }

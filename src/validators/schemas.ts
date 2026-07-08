@@ -25,7 +25,11 @@ export const createOrderSchema = z.object({
   paymentMethod: z.enum(['CASH', 'CARD']),
   items: z.array(z.object({
     itemId: z.string().min(1),
+    itemName: z.string().min(1).optional(),
+    name: z.string().min(1).optional(),
     sizeId: z.string().min(1).nullable().optional(),
+    sizeName: z.string().min(1).optional(),
+    size: z.string().min(1).optional(),
     quantity: z.number().int().positive(),
     unitPrice: z.number().nonnegative(),
     notes: z.string().optional()

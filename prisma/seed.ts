@@ -1,3 +1,4 @@
+import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
 import { PrismaClient } from "@prisma/client";
@@ -7,10 +8,6 @@ const selectedEnvFile = process.env.NODE_ENV === "production" ? ".env.production
 dotenv.config({ path: path.resolve(process.cwd(), selectedEnvFile) });
 
 const ensureDatabaseUrl = (): void => {
-  if (process.env.DATABASE_URL) {
-    return;
-  }
-
   if (process.env.DB_HOST && process.env.DB_USER && process.env.DB_NAME) {
     const host = process.env.DB_HOST;
     const port = process.env.DB_PORT || "3306";
@@ -18,6 +15,11 @@ const ensureDatabaseUrl = (): void => {
     const password = encodeURIComponent(process.env.DB_PASSWORD || "");
     const database = encodeURIComponent(process.env.DB_NAME);
     process.env.DATABASE_URL = `mysql://${user}:${password}@${host}:${port}/${database}`;
+    return;
+  }
+
+  if (!process.env.DATABASE_URL) {
+    return;
   }
 };
 
@@ -26,23 +28,242 @@ ensureDatabaseUrl();
 const prisma = new PrismaClient();
 
 async function shouldSeedDatabase(): Promise<boolean> {
-  const [userCount, roleCount] = await Promise.all([
-    prisma.user.count(),
-    prisma.role.count(),
-  ]);
+  const branchMenuCount = await prisma.branchMenu.count();
+  return branchMenuCount === 0;
+}
 
-  return userCount === 0 && roleCount === 0;
+function loadMenuSeedData(): any {
+  const candidates = [
+    path.resolve(process.cwd(), "menu", "menu_response.json"),
+    path.resolve(__dirname, "..", "..", "menu", "menu_response.json"),
+    path.resolve("/menu", "menu_response.json"),
+  ];
+
+  const menuPath = candidates.find((candidate) => fs.existsSync(candidate));
+  if (!menuPath) {
+    throw new Error(`Could not find menu_response.json. Tried: ${candidates.join(", ")}`);
+  }
+
+  const raw = fs.readFileSync(menuPath, "utf8").replace(/^\uFEFF/, "");
+  return JSON.parse(raw);
+}
+
+async function ensureBranchMenuSeed(branchId: string, branchName: string, menuSeedData: any) {
+  const existingBranchMenu = await prisma.branchMenu.findFirst({
+    where: { branchId, name: "Main Menu" },
+  });
+
+  const rolloCategoryNames = ["Rollo", "Rollo ", "Rollos"];
+  const pepsiItemNames = ["PEPSI", "Pepsi"];
+  const sizeGroupName = "Default";
+  const sizeNames = ["Małe", "Średnie", "Duże"];
+  const sizeValues = ["male", "srednie", "duze"];
+  const sizePricesByItem: Record<string, string[]> = {
+    PEPSI: ["4.50", "6.00", "8.50"],
+    Pepsi: ["4.50", "6.00", "8.50"],
+  };
+
+  const branchMenu = existingBranchMenu
+    ? await prisma.branchMenu.update({
+        where: { id: existingBranchMenu.id },
+        data: { active: true, name: "Main Menu" },
+      })
+    : await prisma.branchMenu.create({
+        data: {
+          branchId,
+          name: "Main Menu",
+          active: true,
+        },
+      });
+
+  let sizeGroup = await prisma.sizeGroup.findFirst({ where: { name: sizeGroupName } });
+  if (!sizeGroup) {
+    sizeGroup = await prisma.sizeGroup.create({
+      data: {
+        name: sizeGroupName,
+        unit: "pcs",
+        active: true,
+      },
+    });
+  }
+
+  const sizeOptions: Array<{ id: string; name: string; value: string }> = [];
+  for (const [index, sizeName] of sizeNames.entries()) {
+    let sizeOption = await prisma.sizeOption.findFirst({
+      where: { sizeGroupId: sizeGroup.id, name: sizeName },
+    });
+
+    if (!sizeOption) {
+      sizeOption = await prisma.sizeOption.create({
+        data: {
+          sizeGroupId: sizeGroup.id,
+          name: sizeName,
+          value: sizeValues[index],
+          displayOrder: index,
+          active: true,
+        },
+      });
+    } else {
+      await prisma.sizeOption.update({
+        where: { id: sizeOption.id },
+        data: {
+          value: sizeValues[index],
+          displayOrder: index,
+          active: true,
+        },
+      });
+    }
+
+    sizeOptions.push({ id: sizeOption.id, name: sizeOption.name, value: sizeOption.value ?? sizeValues[index] });
+  }
+
+  for (const [categoryIndex, categorySeed] of (menuSeedData.categories || []).entries()) {
+    let category = await prisma.category.findFirst({
+      where: { menuId: branchMenu.id, name: categorySeed.name },
+    });
+
+    if (!category) {
+      category = await prisma.category.create({
+        data: {
+          menuId: branchMenu.id,
+          name: categorySeed.name,
+          icon: "restaurant",
+          displayOrder: categoryIndex,
+          active: true,
+        },
+      });
+    } else {
+      await prisma.category.update({
+        where: { id: category.id },
+        data: {
+          displayOrder: categoryIndex,
+          active: true,
+        },
+      });
+    }
+
+    for (const [itemIndex, itemSeed] of (categorySeed.items || []).entries()) {
+      let menuItem = await prisma.menuItem.findFirst({
+        where: { categoryId: category.id, name: itemSeed.name },
+      });
+
+      const fallbackPrice = 10 + itemIndex * 2;
+      const itemPrice = Number(itemSeed.prices?.[0]?.price ?? fallbackPrice);
+
+      if (!menuItem) {
+        menuItem = await prisma.menuItem.create({
+          data: {
+            categoryId: category.id,
+            name: itemSeed.name,
+            description: itemSeed.description ?? null,
+            imageUrl: itemSeed.imageUrl ?? null,
+            active: true,
+          },
+        });
+      } else {
+        await prisma.menuItem.update({
+          where: { id: menuItem.id },
+          data: {
+            description: itemSeed.description ?? null,
+            imageUrl: itemSeed.imageUrl ?? null,
+            active: true,
+          },
+        });
+      }
+
+      let branchMenuItem = await prisma.branchMenuItem.findFirst({
+        where: { branchMenuId: branchMenu.id, menuItemId: menuItem.id },
+      });
+
+      if (!branchMenuItem) {
+        branchMenuItem = await prisma.branchMenuItem.create({
+          data: {
+            branchMenuId: branchMenu.id,
+            menuItemId: menuItem.id,
+            available: true,
+            nameOverride: itemSeed.name,
+            descriptionOverride: itemSeed.description ?? null,
+          },
+        });
+      } else {
+        await prisma.branchMenuItem.update({
+          where: { id: branchMenuItem.id },
+          data: {
+            available: true,
+            nameOverride: itemSeed.name,
+            descriptionOverride: itemSeed.description ?? null,
+          },
+        });
+      }
+
+      const shouldAssignSizes = rolloCategoryNames.includes(categorySeed.name) || pepsiItemNames.includes(itemSeed.name);
+
+      if (shouldAssignSizes) {
+        const priceOverrides = sizePricesByItem[itemSeed.name] ?? [String(itemPrice), String(itemPrice + 2), String(itemPrice + 4)];
+
+        for (const [index, sizeOption] of sizeOptions.entries()) {
+          const sizePrice = Number(priceOverrides[index] ?? itemPrice);
+          let branchMenuItemSize = await prisma.branchMenuItemSize.findFirst({
+            where: { branchMenuItemId: branchMenuItem.id, sizeOptionId: sizeOption.id },
+          });
+
+          if (!branchMenuItemSize) {
+            await prisma.branchMenuItemSize.create({
+              data: {
+                branchMenuItemId: branchMenuItem.id,
+                sizeOptionId: sizeOption.id,
+                price: sizePrice,
+                available: true,
+              },
+            });
+          } else {
+            await prisma.branchMenuItemSize.update({
+              where: { id: branchMenuItemSize.id },
+              data: {
+                price: sizePrice,
+                available: true,
+              },
+            });
+          }
+        }
+      } else {
+        let branchMenuItemSize = await prisma.branchMenuItemSize.findFirst({
+          where: { branchMenuItemId: branchMenuItem.id, sizeOptionId: sizeOptions[0]?.id },
+        });
+
+        if (branchMenuItemSize) {
+          await prisma.branchMenuItemSize.delete({ where: { id: branchMenuItemSize.id } });
+        }
+
+        let defaultSize = await prisma.branchMenuItemSize.findFirst({
+          where: { branchMenuItemId: branchMenuItem.id, sizeOptionId: sizeOptions[0]?.id },
+        });
+
+        if (!defaultSize) {
+          await prisma.branchMenuItemSize.create({
+            data: {
+              branchMenuItemId: branchMenuItem.id,
+              sizeOptionId: sizeOptions[0]?.id,
+              price: itemPrice,
+              available: true,
+            },
+          });
+        }
+      }
+    }
+  }
+
+  console.log(`  ✓ Seeded branch menu for ${branchName}`);
 }
 
 async function main() {
   const shouldSeed = await shouldSeedDatabase();
 
   if (!shouldSeed) {
-    console.log("ℹ️ Database already contains seed data. Skipping seed.");
-    return;
+    console.log("ℹ️ Database already contains seed data. Updating existing seed records.");
+  } else {
+    console.log("🌱 Applying database seed...");
   }
-
-  console.log("🌱 Seeding database...");
 
   // ============================================================================
   // ROLES
@@ -349,12 +570,21 @@ async function main() {
     console.log(`  ✓ Created branch: ${seededBranch.name}`);
   }
 
+  const createdBranches = [{ id: branch.id, name: branch.name }];
+  for (const seededBranch of branchSeedData) {
+    createdBranches.push({ id: seededBranch.id, name: seededBranch.name });
+  }
+
+  const menuSeedData = loadMenuSeedData();
+  for (const branchSeed of createdBranches) {
+    await ensureBranchMenuSeed(branchSeed.id, branchSeed.name, menuSeedData);
+  }
+
   // ============================================================================
   // RESTAURANT CONFIGURATION
   // ============================================================================
   console.log("⚙️  Creating restaurant configuration...");
 
-  // Restaurant Info
   const info = await prisma.restaurantInfo.upsert({
     where: { restaurantId: restaurant.id },
     update: {},
@@ -364,45 +594,43 @@ async function main() {
       plasticBagFee: 1.0,
     },
   });
-  console.log(`  ✓ Created restaurant info`);
+  console.log("  ✓ Created restaurant info");
 
-  // Opening Hours
   const hours = [
-    { dayRange: 0, openTime: "10:00", closeTime: "24:00" }, // Monday
-    { dayRange: 1, openTime: "10:00", closeTime: "24:00" }, // Tuesday
-    { dayRange: 2, openTime: "10:00", closeTime: "24:00" }, // Wednesday
-    { dayRange: 3, openTime: "10:00", closeTime: "24:00" }, // Thursday
-    { dayRange: 4, openTime: "10:00", closeTime: "02:00" }, // Friday
-    { dayRange: 5, openTime: "10:00", closeTime: "02:00" }, // Saturday
-    { dayRange: 6, openTime: "10:00", closeTime: "24:00" }, // Sunday
+    { dayOfWeek: 0, openTime: "10:00", closeTime: "24:00" },
+    { dayOfWeek: 1, openTime: "10:00", closeTime: "24:00" },
+    { dayOfWeek: 2, openTime: "10:00", closeTime: "24:00" },
+    { dayOfWeek: 3, openTime: "10:00", closeTime: "24:00" },
+    { dayOfWeek: 4, openTime: "10:00", closeTime: "02:00" },
+    { dayOfWeek: 5, openTime: "10:00", closeTime: "02:00" },
+    { dayOfWeek: 6, openTime: "10:00", closeTime: "24:00" },
   ];
 
-  for (const hour of hours) {
-    await prisma.restaurantHours.upsert({
-      where: { restaurantId_dayRange: { restaurantId: restaurant.id, dayRange: hour.dayRange } },
-      update: { openTime: hour.openTime, closeTime: hour.closeTime },
+  for (const branchSeed of createdBranches) {
+    for (const hour of hours) {
+      await prisma.branchHours.upsert({
+        where: { branchId_dayOfWeek: { branchId: branchSeed.id, dayOfWeek: hour.dayOfWeek } },
+        update: { openTime: hour.openTime, closeTime: hour.closeTime },
+        create: {
+          branchId: branchSeed.id,
+          ...hour,
+        },
+      });
+    }
+
+    await prisma.branchDeliveryRule.upsert({
+      where: { branchId: branchSeed.id },
+      update: {},
       create: {
-        restaurantId: restaurant.id,
-        ...hour,
+        branchId: branchSeed.id,
+        minimumOrderValue: 40.0,
+        maximumDeliveryDistance: 20.0,
+        baseDeliveryFee: 5.0,
+        perKmFee: 2.0,
       },
     });
   }
-  console.log(`  ✓ Created opening hours for all days`);
-
-  // Delivery Rules
-  const deliveryRules = await prisma.restaurantDeliveryRules.upsert({
-    where: { restaurantId: restaurant.id },
-    update: {},
-    create: {
-      restaurantId: restaurant.id,
-      minOrderValue: 40.0,
-      minDeliveryDistance: 0.0,
-      maxDeliveryDistance: 20.0,
-      baseFee: 5.0,
-      perKmFee: 2.0,
-    },
-  });
-  console.log(`  ✓ Created delivery rules`);
+  console.log("  ✓ Created branch hours and delivery rules");
 
   // ============================================================================
   // STAFF ASSIGNMENTS
@@ -422,7 +650,7 @@ async function main() {
       branchId: branch.id,
     },
   });
-  console.log(`  ✓ Assigned kitchen staff to branch`);
+  console.log("  ✓ Assigned kitchen staff to branch");
 
   // ============================================================================
   // DRIVER PROFILE
@@ -442,7 +670,7 @@ async function main() {
       },
     },
   });
-  console.log(`  ✓ Created driver profile`);
+  console.log("  ✓ Created driver profile");
 
   // ============================================================================
   // CUSTOMER ADDRESS
@@ -468,279 +696,7 @@ async function main() {
       active: true,
     },
   });
-  console.log(`  ✓ Created customer address`);
-
-  // ============================================================================
-  // MENU SYSTEM - CATEGORIES, ITEMS, SIZES, PRICES
-  // ============================================================================
-  console.log("🍴 Creating menu structure...");
-
-  // Sizes
-  const sizeData = [
-    { id: "size-small", name: "Małe / Mała / Mały" },
-    { id: "size-medium", name: "Średnie / Średnia / Średni" },
-    { id: "size-large", name: "Mega / Duża / Duży" },
-    { id: "size-033l", name: "0.33L" },
-    { id: "size-05l", name: "0.5L" },
-  ];
-
-  const sizes: Record<string, string> = {};
-  for (const size of sizeData) {
-    const s = await prisma.size.upsert({
-      where: { name: size.name },
-      update: {},
-      create: size,
-    });
-    sizes[size.id] = s.id;
-  }
-  console.log(`  ✓ Created ${sizeData.length} sizes`);
-
-  // Categories
-  const categoryData = [
-    { id: "cat-rollo", name: "Rollo" },
-    { id: "cat-tortilla", name: "Tortilla" },
-    { id: "cat-talerz", name: "Talerz" },
-    { id: "cat-box", name: "Box" },
-    { id: "cat-bulka", name: "Bułka" },
-    { id: "cat-kapsalon", name: "Kapsalon" },
-    { id: "cat-kurczak", name: "Kurczak" },
-    { id: "cat-salatki", name: "Sałatki" },
-    { id: "cat-dodatki", name: "Dodatki" },
-    { id: "cat-napoje", name: "Napoje" },
-  ];
-
-  const categories: Record<string, string> = {};
-  for (const cat of categoryData) {
-    const c = await prisma.category.upsert({
-      where: { name: cat.name },
-      update: {},
-      create: cat,
-    });
-    categories[cat.id] = c.id;
-  }
-  console.log(`  ✓ Created ${categoryData.length} categories`);
-
-  // Items
-  interface ItemData {
-    id: string;
-    categoryId: string;
-    name: string;
-    description?: string;
-  }
-
-  interface ItemPriceData {
-    itemId: string;
-    sizeId: string | null;
-    price: number;
-  }
-
-  const itemsData: ItemData[] = [
-    // Rollo
-    { id: "item-1", categoryId: "cat-rollo", name: "ROLLO DELTA KEBAB" },
-    { id: "item-2", categoryId: "cat-rollo", name: "ROLLO DELTA KEBAB Z SEREM" },
-    { id: "item-3", categoryId: "cat-rollo", name: "DELTA AMERYKAŃSKIE" },
-    { id: "item-4", categoryId: "cat-rollo", name: "ROLLO DELTA SAMO MIĘSO" },
-    { id: "item-5", categoryId: "cat-rollo", name: "SUPER ROLLO DELTA" },
-    { id: "item-6", categoryId: "cat-rollo", name: "SZPINAK ROLLO DELTA" },
-    { id: "item-7", categoryId: "cat-rollo", name: "ROLLO WEGE" },
-    { id: "item-8", categoryId: "cat-rollo", name: "SUPER MEGA ROLLO AMERYKAŃSKIE" },
-    { id: "item-9", categoryId: "cat-rollo", name: "SUPER MEGA ROLLO Z SEREM" },
-    { id: "item-10", categoryId: "cat-rollo", name: "ROLLO DELTA GREKO" },
-    { id: "item-11", categoryId: "cat-rollo", name: "ROLLO DELTA HOT SPICY" },
-    { id: "item-12", categoryId: "cat-rollo", name: "ROLLO WRAP" },
-    // Tortilla
-    { id: "item-13", categoryId: "cat-tortilla", name: "TORTILLA DELTA" },
-    { id: "item-14", categoryId: "cat-tortilla", name: "TORTILLA DELTA Z SEREM" },
-    { id: "item-15", categoryId: "cat-tortilla", name: "TORTILLA AMERYKAŃSKA" },
-    { id: "item-16", categoryId: "cat-tortilla", name: "TORTILLA SAMO MIĘSO" },
-    // Talerz
-    { id: "item-17", categoryId: "cat-talerz", name: "TALERZ KEBAB" },
-    { id: "item-18", categoryId: "cat-talerz", name: "SUPER TALERZ" },
-    { id: "item-19", categoryId: "cat-talerz", name: "MEGA TALERZ" },
-    { id: "item-20", categoryId: "cat-talerz", name: "TALERZ SAMO MIĘSO" },
-    { id: "item-21", categoryId: "cat-talerz", name: "TALERZ FALAFEL" },
-    // Box
-    { id: "item-22", categoryId: "cat-box", name: "KEBAB BOX" },
-    { id: "item-23", categoryId: "cat-box", name: "BOX AMERYKAŃSKI" },
-    { id: "item-24", categoryId: "cat-box", name: "KIDS BOX" },
-    // Bułka
-    { id: "item-25", categoryId: "cat-bulka", name: "KEBAB W BUŁCE" },
-    { id: "item-26", categoryId: "cat-bulka", name: "AMERYKAŃSKA" },
-    { id: "item-27", categoryId: "cat-bulka", name: "SUPER DELTA W BUŁCE" },
-    { id: "item-28", categoryId: "cat-bulka", name: "BUŁKA SAMO MIĘSO" },
-    // Kapsalon
-    { id: "item-29", categoryId: "cat-kapsalon", name: "KAPSALON" },
-    // Kurczak
-    { id: "item-30", categoryId: "cat-kurczak", name: "DELTOPYCHA" },
-    { id: "item-31", categoryId: "cat-kurczak", name: "CHICKEN STRIPS" },
-    { id: "item-32", categoryId: "cat-kurczak", name: "CHICKEN POPS" },
-    // Sałatki
-    { id: "item-33", categoryId: "cat-salatki", name: "SAŁATKA Z KEBABEM" },
-    { id: "item-34", categoryId: "cat-salatki", name: "CRISPY SALAD" },
-    { id: "item-35", categoryId: "cat-salatki", name: "GRECKA" },
-    // Dodatki
-    { id: "item-36", categoryId: "cat-dodatki", name: "FRYTKI" },
-    { id: "item-37", categoryId: "cat-dodatki", name: "FRYTKI Z SEREM" },
-    { id: "item-38", categoryId: "cat-dodatki", name: "BAKLAWA" },
-    { id: "item-39", categoryId: "cat-dodatki", name: "DODATKOWE MIĘSO" },
-    { id: "item-40", categoryId: "cat-dodatki", name: "DODATKOWE WARZYWA" },
-    { id: "item-41", categoryId: "cat-dodatki", name: "DODATKOWY SER" },
-    { id: "item-42", categoryId: "cat-dodatki", name: "DODATKOWY SOS" },
-    { id: "item-43", categoryId: "cat-dodatki", name: "KULKI WARZYWNE" },
-    // Napoje
-    { id: "item-44", categoryId: "cat-napoje", name: "AYRAN" },
-    { id: "item-45", categoryId: "cat-napoje", name: "MANGO DIMES" },
-    { id: "item-46", categoryId: "cat-napoje", name: "PEPSI" },
-    { id: "item-47", categoryId: "cat-napoje", name: "MIRINDA" },
-    { id: "item-48", categoryId: "cat-napoje", name: "LIPTON" },
-    { id: "item-49", categoryId: "cat-napoje", name: "MOUNTAIN DEW" },
-    { id: "item-50", categoryId: "cat-napoje", name: "WODA" },
-  ];
-
-  const itemIds: Record<string, string> = {};
-  for (const item of itemsData) {
-    const i = await prisma.item.upsert({
-      where: { id: item.id },
-      update: {},
-      create: {
-        id: item.id,
-        categoryId: categories[item.categoryId],
-        name: item.name,
-        description: item.description,
-        active: true,
-      },
-    });
-    itemIds[item.id] = i.id;
-  }
-  console.log(`  ✓ Created ${itemsData.length} items`);
-
-  // Item Prices
-  const itemPricesData: ItemPriceData[] = [
-    // Rollo prices
-    { itemId: "item-1", sizeId: "size-small", price: 17.0 },
-    { itemId: "item-1", sizeId: "size-medium", price: 24.0 },
-    { itemId: "item-1", sizeId: "size-large", price: 30.0 },
-    { itemId: "item-2", sizeId: "size-small", price: 20.0 },
-    { itemId: "item-2", sizeId: "size-medium", price: 26.0 },
-    { itemId: "item-2", sizeId: "size-large", price: 32.0 },
-    { itemId: "item-3", sizeId: "size-small", price: 19.0 },
-    { itemId: "item-3", sizeId: "size-medium", price: 25.0 },
-    { itemId: "item-3", sizeId: "size-large", price: 31.0 },
-    { itemId: "item-4", sizeId: "size-small", price: 23.0 },
-    { itemId: "item-4", sizeId: "size-medium", price: 30.0 },
-    { itemId: "item-4", sizeId: "size-large", price: 36.0 },
-    { itemId: "item-5", sizeId: "size-small", price: 23.0 },
-    { itemId: "item-5", sizeId: "size-medium", price: 30.0 },
-    { itemId: "item-6", sizeId: "size-small", price: 23.0 },
-    { itemId: "item-6", sizeId: "size-medium", price: 30.0 },
-    { itemId: "item-7", sizeId: "size-small", price: 15.0 },
-    { itemId: "item-7", sizeId: "size-medium", price: 20.0 },
-    { itemId: "item-7", sizeId: "size-large", price: 25.0 },
-    { itemId: "item-8", sizeId: "size-large", price: 43.0 },
-    { itemId: "item-9", sizeId: "size-large", price: 43.0 },
-    { itemId: "item-10", sizeId: "size-small", price: 22.0 },
-    { itemId: "item-10", sizeId: "size-medium", price: 28.0 },
-    { itemId: "item-11", sizeId: "size-small", price: 22.0 },
-    { itemId: "item-11", sizeId: "size-medium", price: 28.0 },
-    { itemId: "item-12", sizeId: "size-small", price: 22.0 },
-    { itemId: "item-12", sizeId: "size-medium", price: 28.0 },
-    // Tortilla prices
-    { itemId: "item-13", sizeId: "size-small", price: 20.0 },
-    { itemId: "item-13", sizeId: "size-medium", price: 26.0 },
-    { itemId: "item-13", sizeId: "size-large", price: 33.0 },
-    { itemId: "item-14", sizeId: "size-small", price: 21.0 },
-    { itemId: "item-14", sizeId: "size-medium", price: 27.0 },
-    { itemId: "item-14", sizeId: "size-large", price: 34.0 },
-    { itemId: "item-15", sizeId: "size-small", price: 21.0 },
-    { itemId: "item-15", sizeId: "size-medium", price: 27.0 },
-    { itemId: "item-15", sizeId: "size-large", price: 34.0 },
-    { itemId: "item-16", sizeId: "size-small", price: 25.0 },
-    { itemId: "item-16", sizeId: "size-medium", price: 30.0 },
-    { itemId: "item-16", sizeId: "size-large", price: 37.0 },
-    // Talerz prices
-    { itemId: "item-17", sizeId: null, price: 29.0 },
-    { itemId: "item-18", sizeId: null, price: 35.0 },
-    { itemId: "item-19", sizeId: null, price: 43.0 },
-    { itemId: "item-20", sizeId: null, price: 34.0 },
-    { itemId: "item-21", sizeId: null, price: 22.0 },
-    // Box prices
-    { itemId: "item-22", sizeId: "size-small", price: 21.0 },
-    { itemId: "item-22", sizeId: "size-large", price: 27.0 },
-    { itemId: "item-23", sizeId: "size-small", price: 24.0 },
-    { itemId: "item-23", sizeId: "size-large", price: 30.0 },
-    { itemId: "item-24", sizeId: "size-small", price: 19.0 },
-    // Bułka prices
-    { itemId: "item-25", sizeId: "size-small", price: 22.0 },
-    { itemId: "item-25", sizeId: "size-medium", price: 27.0 },
-    { itemId: "item-25", sizeId: "size-large", price: 34.0 },
-    { itemId: "item-26", sizeId: "size-small", price: 24.0 },
-    { itemId: "item-26", sizeId: "size-medium", price: 30.0 },
-    { itemId: "item-26", sizeId: "size-large", price: 37.0 },
-    { itemId: "item-27", sizeId: "size-small", price: 27.0 },
-    { itemId: "item-27", sizeId: "size-medium", price: 32.0 },
-    { itemId: "item-27", sizeId: "size-large", price: 39.0 },
-    { itemId: "item-28", sizeId: "size-small", price: 28.0 },
-    { itemId: "item-28", sizeId: "size-medium", price: 36.0 },
-    // Kapsalon prices
-    { itemId: "item-29", sizeId: null, price: 31.0 },
-    // Kurczak prices
-    { itemId: "item-30", sizeId: null, price: 26.0 },
-    { itemId: "item-31", sizeId: null, price: 24.0 },
-    { itemId: "item-32", sizeId: null, price: 21.0 },
-    // Sałatki prices
-    { itemId: "item-33", sizeId: null, price: 24.0 },
-    { itemId: "item-34", sizeId: null, price: 22.0 },
-    { itemId: "item-35", sizeId: null, price: 16.0 },
-    // Dodatki prices
-    { itemId: "item-36", sizeId: "size-small", price: 9.0 },
-    { itemId: "item-36", sizeId: "size-large", price: 17.0 },
-    { itemId: "item-37", sizeId: "size-small", price: 12.0 },
-    { itemId: "item-37", sizeId: "size-large", price: 19.0 },
-    { itemId: "item-38", sizeId: null, price: 7.0 },
-    { itemId: "item-39", sizeId: null, price: 8.0 },
-    { itemId: "item-40", sizeId: null, price: 3.0 },
-    { itemId: "item-41", sizeId: null, price: 3.0 },
-    { itemId: "item-42", sizeId: null, price: 3.0 },
-    { itemId: "item-43", sizeId: null, price: 16.0 },
-    // Napoje prices
-    { itemId: "item-44", sizeId: null, price: 6.0 },
-    { itemId: "item-45", sizeId: "size-033l", price: 7.0 },
-    { itemId: "item-46", sizeId: "size-033l", price: 7.0 },
-    { itemId: "item-46", sizeId: "size-05l", price: 9.0 },
-    { itemId: "item-47", sizeId: "size-033l", price: 7.0 },
-    { itemId: "item-47", sizeId: "size-05l", price: 9.0 },
-    { itemId: "item-48", sizeId: "size-033l", price: 7.0 },
-    { itemId: "item-48", sizeId: "size-05l", price: 9.0 },
-    { itemId: "item-49", sizeId: "size-033l", price: 7.0 },
-    { itemId: "item-49", sizeId: "size-05l", price: 9.0 },
-    { itemId: "item-50", sizeId: "size-05l", price: 5.0 },
-  ];
-
-  let priceCount = 0;
-  for (const price of itemPricesData) {
-    const foundItem = await prisma.item.findUnique({
-      where: { id: price.itemId },
-    });
-
-    if (foundItem) {
-      await prisma.itemPrice.upsert({
-        where: {
-          id: `${price.itemId}-${price.sizeId || "no-size"}-${branch.id}`,
-        },
-        update: {},
-        create: {
-          id: `${price.itemId}-${price.sizeId || "no-size"}-${branch.id}`,
-          itemId: foundItem.id,
-          branchId: branch.id,
-          price: price.price,
-          validFrom: new Date(),
-          validTo: null,
-        },
-      });
-      priceCount++;
-    }
-  }
-  console.log(`  ✓ Created ${priceCount} item prices`);
+  console.log("  ✓ Created customer address");
 
   // ============================================================================
   // SAMPLE ORDER (Optional - for testing)
@@ -770,30 +726,27 @@ async function main() {
   });
   console.log(`  ✓ Created sample order: ${order.id}`);
 
-  // Add items to order
-  const orderItem1 = await prisma.orderItem.create({
-    data: {
-      orderId: order.id,
-      itemName: "ROLLO DELTA KEBAB",
-      sizeName: "Średnie",
-      quantity: 2,
-      unitPrice: 24.0,
-      notes: "Extra sauce",
-    },
+  await prisma.orderItem.createMany({
+    data: [
+      {
+        orderId: order.id,
+        itemName: "ROLLO DELTA KEBAB",
+        sizeName: "Średnie",
+        quantity: 2,
+        unitPrice: 24.0,
+        notes: "Extra sauce",
+      },
+      {
+        orderId: order.id,
+        itemName: "FRYTKI",
+        sizeName: "Duże",
+        quantity: 1,
+        unitPrice: 17.0,
+        notes: "",
+      },
+    ],
   });
 
-  const orderItem2 = await prisma.orderItem.create({
-    data: {
-      orderId: order.id,
-      itemName: "FRYTKI",
-      sizeName: "Duże",
-      quantity: 1,
-      unitPrice: 17.0,
-      notes: "",
-    },
-  });
-
-  // Add status history
   await prisma.orderStatusHistory.create({
     data: {
       orderId: order.id,
@@ -804,7 +757,7 @@ async function main() {
     },
   });
 
-  console.log(`  ✓ Added order items and status history`);
+  console.log("  ✓ Added order items and status history");
 
   // ============================================================================
   // COMPLETION
@@ -812,19 +765,16 @@ async function main() {
   console.log("\n✅ Database seed completed successfully!");
   console.log("\n📊 Seed Summary:");
   console.log(`   - Roles: ${roleNames.length}`);
-  console.log(`   - Users: 4 (admin, kitchen, driver, customer)`);
-  console.log(`   - Restaurant & Branch: 1 each`);
-  console.log(`   - Categories: ${categoryData.length}`);
-  console.log(`   - Items: ${itemsData.length}`);
-  console.log(`   - Sizes: ${sizeData.length}`);
-  console.log(`   - Item Prices: ${priceCount}`);
-  console.log(`   - Sample Order: 1`);
+  console.log("   - Users: 4 (admin, kitchen, driver, customer)");
+  console.log("   - Restaurant & Branch: 1 each");
+  console.log("   - Branch menus: seeded from the local menu JSON");
+  console.log("   - Sample Order: 1");
 
   console.log("\n🔐 Test Credentials:");
-  console.log(`   Admin: admin@delta.local / admin123`);
-  console.log(`   Kitchen: kitchen@delta.local / kitchen123`);
-  console.log(`   Driver: driver@delta.local / driver123`);
-  console.log(`   Customer: customer@delta.local / customer123`);
+  console.log("   Admin: admin@delta.local / admin123");
+  console.log("   Kitchen: kitchen@delta.local / kitchen123");
+  console.log("   Driver: driver@delta.local / driver123");
+  console.log("   Customer: customer@delta.local / customer123");
 }
 
 main()

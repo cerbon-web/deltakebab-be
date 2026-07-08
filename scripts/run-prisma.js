@@ -16,7 +16,7 @@ const env = {
   ...process.env,
 };
 
-if (!env.DATABASE_URL && env.DB_HOST && env.DB_USER && env.DB_NAME) {
+if (env.DB_HOST && env.DB_USER && env.DB_NAME) {
   const port = env.DB_PORT || '3306';
   env.DATABASE_URL = `mysql://${encodeURIComponent(env.DB_USER)}:${encodeURIComponent(env.DB_PASSWORD || '')}@${env.DB_HOST}:${port}/${encodeURIComponent(env.DB_NAME)}`;
 }

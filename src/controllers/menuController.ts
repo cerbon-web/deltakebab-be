@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
-import { getMenuByRestaurant } from '../services/menuService';
+import { getBranchMenu } from '../services/menuService';
 
 export const menuController = async (req: Request, res: Response) => {
-  const menu = await getMenuByRestaurant(req.params.restaurantId);
+  const menu = await getBranchMenu(req.params.branchId);
   res.json(menu);
 };
