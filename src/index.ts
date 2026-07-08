@@ -54,15 +54,56 @@ app.use(errorHandler);
 
 initSocket(server);
 
-const runSeedIfNeeded = () => {
-  const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-  const result = spawnSync(npmCommand, ['run', 'db:seed'], {
+const isDatabaseEmpty = () => {
+  const nodeCommand = process.execPath;
+  const result = spawnSync(nodeCommand, [path.resolve(__dirname, '..', 'scripts', 'check-db-empty.js')], {
     cwd: path.resolve(__dirname, '..'),
     stdio: 'inherit',
-    env: process.env
+    env: process.env,
   });
 
-  if (result.status !== 0) {
+  if (result.status === 0) {
+    return true;
+  }
+
+  if (result.status === 1) {
+    return false;
+  }
+
+  logger.warn('Unable to verify database state; skipping Prisma prepare/seed.');
+  return false;
+};
+
+const runPrismaPrepareAndSeedIfEmpty = () => {
+  if (process.env.SKIP_PRISMA_SEED) {
+    logger.info('SKIP_PRISMA_SEED set; skipping Prisma prepare/seed.');
+    return;
+  }
+
+  if (!isDatabaseEmpty()) {
+    logger.info('Database already has tables or could not be verified; skipping Prisma prepare/seed.');
+    return;
+  }
+
+  const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  const prepareResult = spawnSync(npmCommand, ['run', 'db:prepare'], {
+    cwd: path.resolve(__dirname, '..'),
+    stdio: 'inherit',
+    env: process.env,
+  });
+
+  if (prepareResult.status !== 0) {
+    logger.warn('Prisma prepare step failed; skipping seed and continuing startup');
+    return;
+  }
+
+  const seedResult = spawnSync(npmCommand, ['run', 'db:seed'], {
+    cwd: path.resolve(__dirname, '..'),
+    stdio: 'inherit',
+    env: process.env,
+  });
+
+  if (seedResult.status !== 0) {
     logger.warn('Database seed step finished with a non-zero exit code; continuing startup');
   }
 };
@@ -73,9 +114,7 @@ void verifyDatabaseConnection().then(connected => {
   }
 });
 
-if (!process.env.SKIP_PRISMA_SEED) {
-  runSeedIfNeeded();
-}
+runPrismaPrepareAndSeedIfEmpty();
 
 server.listen(config.port, () => {
   logger.info(`Server listening on port ${config.port}`);
