@@ -192,6 +192,11 @@ const menuSeedData: MenuSeedCategory[] = [
         prices: { mała: 24, średnia: 30, duża: 37 },
       },
       {
+        name: "AMERYKAŃSKA Z SEREM",
+        description: "bułka, mięso, frytki, sosy, ser",
+        prices: { mała: 31, średnia: 36, duża: 42 },
+      },
+      {
         name: "SUPER DELTA W BUŁCE",
         description: "bułka, mięso, warzywa, ser, frytki, sosy",
         prices: { mała: 27, średnia: 32, duża: 39 },
