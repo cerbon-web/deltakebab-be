@@ -1,5 +1,6 @@
 ﻿import path from 'path';
 import dotenv from 'dotenv';
+import { buildDatabaseUrlFromEnv } from './databaseUrl';
 
 type DatabaseConfig = {
   host: string;
@@ -18,14 +19,11 @@ const constructDatabaseUrl = (db: DatabaseConfig): string => {
   return `mysql://${encodeURIComponent(db.user)}:${encodeURIComponent(db.password || '')}@${db.host}:${db.port}/${encodeURIComponent(db.database)}`;
 };
 
-if (!process.env.DATABASE_URL && process.env.DB_HOST && process.env.DB_USER && process.env.DB_NAME) {
-  process.env.DATABASE_URL = constructDatabaseUrl({
-    host: process.env.DB_HOST,
-    port: Number(process.env.DB_PORT || 3306),
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME,
-  });
+if (!process.env.DATABASE_URL) {
+  const resolvedDatabaseUrl = buildDatabaseUrlFromEnv(process.env);
+  if (resolvedDatabaseUrl) {
+    process.env.DATABASE_URL = resolvedDatabaseUrl;
+  }
 }
 
 const parseDatabaseUrl = (url?: string): DatabaseConfig | null => {

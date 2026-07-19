@@ -32,7 +32,14 @@ export const createOrderSchema = z.object({
     size: z.string().min(1).optional(),
     quantity: z.number().int().positive(),
     unitPrice: z.number().nonnegative(),
-    notes: z.string().optional()
+    notes: z.string().optional(),
+    modifiers: z.array(z.object({
+      modifierGroupName: z.string().min(1),
+      modifierOptionName: z.string().min(1),
+      modifierOptionId: z.string().min(1).optional(),
+      price: z.number().nonnegative().optional(),
+      modifierOptionPrice: z.number().nonnegative().optional()
+    })).optional()
   })).min(1),
   notes: z.string().optional(),
   deliveryAddress: z.string().optional()

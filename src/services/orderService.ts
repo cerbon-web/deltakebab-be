@@ -16,7 +16,13 @@ export const createOrder = async (payload: any) => {
     throw new Error('Branch not found');
   }
 
-  const subtotal = items.reduce((sum: number, item: any) => sum + Number(item.unitPrice) * item.quantity, 0);
+  const subtotal = items.reduce((sum: number, item: any) => {
+    const basePrice = Number(item.unitPrice || 0);
+    const modifierTotal = (item.modifiers || []).reduce((modifierSum: number, modifier: any) => {
+      return modifierSum + Number(modifier.price ?? modifier.modifierOptionPrice ?? 0);
+    }, 0);
+    return sum + (basePrice + modifierTotal) * item.quantity;
+  }, 0);
   const deliveryFee = orderType === 'DELIVERY' ? Number(branch.deliveryRules?.baseDeliveryFee ?? 0) : null;
   const total = orderType === 'DELIVERY' ? subtotal + (deliveryFee || 0) : subtotal;
 
@@ -40,15 +46,21 @@ export const createOrder = async (payload: any) => {
       longitude,
       accessNotes,
       items: {
-        createMany: {
-          data: items.map((item: any) => ({
-            itemName: item.itemName || item.name || 'Item',
-            sizeName: item.sizeName || item.size || null,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            notes: item.notes
-          }))
-        }
+        create: items.map((item: any) => ({
+          itemName: item.itemName || item.name || 'Item',
+          sizeName: item.sizeName || item.size || null,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          notes: item.notes,
+          modifiers: {
+            create: (item.modifiers || []).map((modifier: any) => ({
+              modifierGroupNameSnapshot: modifier.modifierGroupName || modifier.groupName || 'Modifier',
+              modifierOptionNameSnapshot: modifier.modifierOptionName || modifier.name || 'Option',
+              priceSnapshot: Number(modifier.price ?? modifier.modifierOptionPrice ?? 0),
+              ...(modifier.modifierOptionId ? { modifierOptionId: modifier.modifierOptionId } : {})
+            }))
+          }
+        }))
       },
       statusHistory: {
         create: {
@@ -58,7 +70,7 @@ export const createOrder = async (payload: any) => {
         }
       }
     },
-    include: { items: true, statusHistory: true }
+    include: { items: { include: { modifiers: true } }, statusHistory: true }
   });
 
   emitOrderUpdate(order.id, { event: 'order.created', orderId: order.id, status: 'NEW', total });

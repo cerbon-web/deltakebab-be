@@ -2,23 +2,15 @@ import path from "path";
 import dotenv from "dotenv";
 import { PrismaClient } from "@prisma/client";
 import bcryptjs from "bcryptjs";
+import { buildDatabaseUrlFromEnv } from "../src/config/databaseUrl";
 
 const selectedEnvFile = process.env.NODE_ENV === "production" ? ".env.production" : ".env";
 dotenv.config({ path: path.resolve(process.cwd(), selectedEnvFile) });
 
 const ensureDatabaseUrl = (): void => {
-  if (process.env.DB_HOST && process.env.DB_USER && process.env.DB_NAME) {
-    const host = process.env.DB_HOST;
-    const port = process.env.DB_PORT || "3306";
-    const user = encodeURIComponent(process.env.DB_USER);
-    const password = encodeURIComponent(process.env.DB_PASSWORD || "");
-    const database = encodeURIComponent(process.env.DB_NAME);
-    process.env.DATABASE_URL = `mysql://${user}:${password}@${host}:${port}/${database}`;
-    return;
-  }
-
-  if (!process.env.DATABASE_URL) {
-    return;
+  const resolvedDatabaseUrl = buildDatabaseUrlFromEnv(process.env);
+  if (resolvedDatabaseUrl) {
+    process.env.DATABASE_URL = resolvedDatabaseUrl;
   }
 };
 
@@ -26,16 +18,82 @@ ensureDatabaseUrl();
 
 const prisma = new PrismaClient();
 
+type MenuSeedModifierOption = {
+  name: string;
+  price: number;
+};
+
+type MenuSeedModifierGroup = {
+  name: string;
+  required?: boolean;
+  minSelections?: number;
+  maxSelections?: number;
+  options: MenuSeedModifierOption[];
+};
+
 type MenuSeedItem = {
   name: string;
   description: string;
   featured?: boolean;
-  prices: Record<string, number>;
+  basePrice?: number;
+  prices?: Record<string, number>;
+  hasSizes?: boolean;
+  modifierGroups?: MenuSeedModifierGroup[];
 };
 
 type MenuSeedCategory = {
   category: string;
   items: MenuSeedItem[];
+};
+
+type SeedSizeOptionInput = {
+  id: string;
+  name: string;
+};
+
+const normalizeSizeOptionName = (value: string | null | undefined) =>
+  (value ?? "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-");
+
+export const buildBranchMenuItemSizePayloads = ({
+  branchMenuItemId,
+  sizeOptions,
+  prices,
+}: {
+  branchMenuItemId: string;
+  sizeOptions: SeedSizeOptionInput[];
+  prices?: Record<string, number>;
+}) => {
+  const payloads: Array<{
+    branchMenuItemId: string;
+    sizeOptionId: string;
+    price: number;
+    available: boolean;
+  }> = [];
+
+  for (const [sizeName, sizePrice] of Object.entries(prices ?? {})) {
+    const normalizedSizeName = normalizeSizeOptionName(sizeName);
+    const sizeOption = sizeOptions.find((option) => {
+      const normalizedOptionName = normalizeSizeOptionName(option.name);
+      const normalizedOptionValue = normalizeSizeOptionName(option.id);
+      return normalizedOptionName === normalizedSizeName || normalizedOptionValue === normalizedSizeName;
+    });
+
+    if (!sizeOption) {
+      continue;
+    }
+
+    payloads.push({
+      branchMenuItemId,
+      sizeOptionId: sizeOption.id,
+      price: Number(sizePrice),
+      available: true,
+    });
+  }
+
+  return payloads;
 };
 
 const menuSeedData: MenuSeedCategory[] = [
@@ -47,6 +105,41 @@ const menuSeedData: MenuSeedCategory[] = [
         description: "pita, mięso, surówka, sos",
         featured: true,
         prices: { STANDARD: 18, ŚREDNIE: 24, MEGA: 30 },
+        modifierGroups: [
+          {
+            name: "Choose Meat",
+            required: true,
+            minSelections: 1,
+            maxSelections: 1,
+            options: [
+              { name: "Chicken", price: 0 },
+              { name: "Beef", price: 2 },
+              { name: "Mixed", price: 3 },
+            ],
+          },
+          {
+            name: "Extras",
+            required: false,
+            minSelections: 0,
+            maxSelections: 3,
+            options: [
+              { name: "Extra Meat", price: 3 },
+              { name: "Extra Cheese", price: 2 },
+              { name: "Extra Vegetables", price: 1 },
+            ],
+          },
+          {
+            name: "Sauces",
+            required: false,
+            minSelections: 0,
+            maxSelections: 2,
+            options: [
+              { name: "Garlic", price: 0 },
+              { name: "Spicy", price: 0 },
+              { name: "BBQ", price: 0 },
+            ],
+          },
+        ],
       },
       {
         name: "ROLLO DELTA Z SEREM",
@@ -306,7 +399,20 @@ const menuSeedData: MenuSeedCategory[] = [
       {
         name: "AYRAN",
         description: "",
-        prices: { standard: 6 },
+        basePrice: 6,
+        hasSizes: false,
+        modifierGroups: [
+          {
+            name: "Temperature",
+            required: true,
+            minSelections: 1,
+            maxSelections: 1,
+            options: [
+              { name: "Cold", price: 0 },
+              { name: "Room Temperature", price: 0 },
+            ],
+          },
+        ],
       },
       {
         name: "MANGO DIMES",
@@ -359,12 +465,89 @@ async function shouldSeedDatabase(): Promise<boolean> {
   return branchMenuCount === 0;
 }
 
+function findMenuSeedItem(name: string): MenuSeedItem | null {
+  for (const categorySeed of menuSeedData) {
+    const itemSeed = categorySeed.items.find((item) => item.name === name);
+    if (itemSeed) {
+      return itemSeed;
+    }
+  }
+
+  return null;
+}
+
+async function ensureBranchMenuItemSizes(branchMenuId: string) {
+  const branchMenuItems = await prisma.branchMenuItem.findMany({
+    where: { branchMenuId },
+    include: {
+      menuItem: true,
+    },
+  });
+
+  for (const branchMenuItem of branchMenuItems) {
+    const itemSeed = findMenuSeedItem(branchMenuItem.menuItem.name);
+    if (!itemSeed || !branchMenuItem.menuItem.sizeGroupId) {
+      continue;
+    }
+
+    const sizeOptions = await prisma.sizeOption.findMany({
+      where: {
+        sizeGroupId: branchMenuItem.menuItem.sizeGroupId,
+        active: true,
+      },
+      orderBy: { displayOrder: "asc" },
+    });
+
+    const sizeRows = sizeOptions
+      .map((sizeOption) => ({
+        branchMenuItemId: branchMenuItem.id,
+        sizeOptionId: sizeOption.id,
+        price: Number(
+          itemSeed.prices?.[sizeOption.name] ??
+            itemSeed.prices?.[sizeOption.value ?? ""] ??
+            itemSeed.basePrice ??
+            0
+        ),
+        available: true,
+      }))
+      .filter((row) => Number.isFinite(row.price));
+
+    if (sizeRows.length === 0) {
+      continue;
+    }
+
+    try {
+      await prisma.branchMenuItemSize.deleteMany({
+        where: { branchMenuItemId: branchMenuItem.id },
+      });
+
+      for (const sizeRow of sizeRows) {
+        await prisma.branchMenuItemSize.upsert({
+          where: {
+            branchMenuItemId_sizeOptionId: {
+              branchMenuItemId: sizeRow.branchMenuItemId,
+              sizeOptionId: sizeRow.sizeOptionId,
+            },
+          },
+          update: {
+            price: sizeRow.price,
+            available: sizeRow.available,
+          },
+          create: sizeRow,
+        });
+      }
+
+    } catch (error) {
+      console.error("[seed-size-debug] upsert failed", branchMenuItem.id, error);
+      throw error;
+    }
+  }
+}
+
 async function ensureBranchMenuSeed(branchId: string, branchName: string) {
   const existingBranchMenu = await prisma.branchMenu.findFirst({
     where: { branchId, name: "Main Menu" },
   });
-
-  const sizeGroupName = "Default";
 
   const branchMenu = existingBranchMenu
     ? await prisma.branchMenu.update({
@@ -378,17 +561,6 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string) {
           active: true,
         },
       });
-
-  let sizeGroup = await prisma.sizeGroup.findFirst({ where: { name: sizeGroupName } });
-  if (!sizeGroup) {
-    sizeGroup = await prisma.sizeGroup.create({
-      data: {
-        name: sizeGroupName,
-        unit: "pcs",
-        active: true,
-      },
-    });
-  }
 
   for (const [categoryIndex, categorySeed] of menuSeedData.entries()) {
     let category = await prisma.category.findFirst({
@@ -416,54 +588,78 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string) {
     }
 
     for (const [itemIndex, itemSeed] of categorySeed.items.entries()) {
+      const hasSizes = itemSeed.hasSizes ?? Boolean(itemSeed.prices && Object.keys(itemSeed.prices).length > 0);
+      let sizeGroup = null as any;
+
+      if (hasSizes) {
+        const sizeGroupName = `Sizes - ${itemSeed.name}`;
+        sizeGroup = await prisma.sizeGroup.findFirst({ where: { name: sizeGroupName } });
+        if (!sizeGroup) {
+          sizeGroup = await prisma.sizeGroup.create({
+            data: {
+              name: sizeGroupName,
+              unit: "pcs",
+              active: true,
+            },
+          });
+        }
+      }
+
       let menuItem = await prisma.menuItem.findFirst({
         where: { categoryId: category.id, name: itemSeed.name },
       });
 
+      const menuItemData = {
+        categoryId: category.id,
+        name: itemSeed.name,
+        description: itemSeed.description ?? null,
+        displayOrder: itemIndex,
+        featured: itemSeed.featured ?? false,
+        active: true,
+        sizeGroupId: sizeGroup?.id ?? null,
+      };
+
       if (!menuItem) {
-        menuItem = await prisma.menuItem.create({
-          data: {
-            categoryId: category.id,
-            name: itemSeed.name,
-            description: itemSeed.description ?? null,
-            displayOrder: itemIndex,
-            featured: itemSeed.featured ?? false,
-            active: true,
-          },
-        });
+        menuItem = await prisma.menuItem.create({ data: menuItemData });
       } else {
         await prisma.menuItem.update({
           where: { id: menuItem.id },
-          data: {
-            description: itemSeed.description ?? null,
-            displayOrder: itemIndex,
-            featured: itemSeed.featured ?? false,
-            active: true,
-          },
+          data: menuItemData,
         });
       }
 
-      let itemSizeGroup = await prisma.itemSizeGroup.findFirst({
-        where: { menuItemId: menuItem.id, sizeGroupId: sizeGroup.id },
-      });
+      if (hasSizes && sizeGroup) {
+        const priceEntries = Object.entries(itemSeed.prices ?? {});
 
-      if (!itemSizeGroup) {
-        itemSizeGroup = await prisma.itemSizeGroup.create({
-          data: {
-            menuItemId: menuItem.id,
-            sizeGroupId: sizeGroup.id,
-            displayOrder: 0,
-            active: true,
-          },
-        });
-      } else {
-        await prisma.itemSizeGroup.update({
-          where: { id: itemSizeGroup.id },
-          data: {
-            displayOrder: 0,
-            active: true,
-          },
-        });
+        for (const [sizeIndex, [sizeName]] of priceEntries.entries()) {
+          const existingSize = await prisma.sizeOption.findFirst({
+            where: {
+              sizeGroupId: sizeGroup.id,
+              name: sizeName,
+            },
+          });
+
+          if (existingSize) {
+            await prisma.sizeOption.update({
+              where: { id: existingSize.id },
+              data: {
+                value: sizeName,
+                displayOrder: sizeIndex,
+                active: true,
+              },
+            });
+          } else {
+            await prisma.sizeOption.create({
+              data: {
+                sizeGroupId: sizeGroup.id,
+                name: sizeName,
+                value: sizeName,
+                displayOrder: sizeIndex,
+                active: true,
+              },
+            });
+          }
+        }
       }
 
       let branchMenuItem = await prisma.branchMenuItem.findFirst({
@@ -478,6 +674,7 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string) {
             available: true,
             nameOverride: itemSeed.name,
             descriptionOverride: itemSeed.description ?? null,
+            basePrice: itemSeed.basePrice != null ? Number(itemSeed.basePrice) : null,
           },
         });
       } else {
@@ -487,56 +684,149 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string) {
             available: true,
             nameOverride: itemSeed.name,
             descriptionOverride: itemSeed.description ?? null,
+            basePrice: itemSeed.basePrice != null ? Number(itemSeed.basePrice) : null,
           },
         });
       }
 
-      const existingSizes = await prisma.branchMenuItemSize.findMany({
-        where: { branchMenuItemId: branchMenuItem.id },
-      });
-
-      for (const existingSize of existingSizes) {
-        await prisma.branchMenuItemSize.delete({ where: { id: existingSize.id } });
-      }
-
-      const priceEntries = Object.entries(itemSeed.prices ?? {});
-      for (const [sizeIndex, [sizeName, sizePrice]] of priceEntries.entries()) {
-        let sizeOption = await prisma.sizeOption.findFirst({
-          where: { sizeGroupId: sizeGroup.id, name: sizeName },
+      if (hasSizes && sizeGroup) {
+        let sizeOptions = await prisma.sizeOption.findMany({
+          where: { sizeGroupId: sizeGroup.id, active: true },
+          orderBy: { displayOrder: "asc" },
         });
 
-        if (!sizeOption) {
-          sizeOption = await prisma.sizeOption.create({
-            data: {
-              sizeGroupId: sizeGroup.id,
-              name: sizeName,
-              value: sizeName,
-              displayOrder: sizeIndex,
-              active: true,
+  
+        if (sizeOptions.length === 0) {
+          const fallbackSizeNames = Object.keys(itemSeed.prices ?? {});
+          for (const [sizeIndex, sizeName] of fallbackSizeNames.entries()) {
+            const createdSizeOption = await prisma.sizeOption.create({
+              data: {
+                sizeGroupId: sizeGroup.id,
+                name: sizeName,
+                value: sizeName,
+                displayOrder: sizeIndex,
+                active: true,
+              },
+            });
+            sizeOptions.push(createdSizeOption as any);
+          }
+        }
+
+        const targetSizeOptionIds = new Set(sizeOptions.map((sizeOption) => sizeOption.id));
+        const existingBranchSizes = await prisma.branchMenuItemSize.findMany({
+          where: { branchMenuItemId: branchMenuItem.id },
+        });
+
+        for (const existingSize of existingBranchSizes) {
+          if (!targetSizeOptionIds.has(existingSize.sizeOptionId)) {
+            await prisma.branchMenuItemSize.delete({ where: { id: existingSize.id } });
+          }
+        }
+
+        for (const sizeOption of sizeOptions) {
+          const price = Number(itemSeed.prices?.[sizeOption.name] ?? itemSeed.prices?.[sizeOption.value ?? ""] ?? itemSeed.basePrice ?? 0);
+          await prisma.branchMenuItemSize.upsert({
+            where: {
+              branchMenuItemId_sizeOptionId: {
+                branchMenuItemId: branchMenuItem.id,
+                sizeOptionId: sizeOption.id,
+              },
             },
-          });
-        } else {
-          await prisma.sizeOption.update({
-            where: { id: sizeOption.id },
-            data: {
-              value: sizeName,
-              displayOrder: sizeIndex,
-              active: true,
+            update: {
+              price,
+              available: true,
+            },
+            create: {
+              branchMenuItemId: branchMenuItem.id,
+              sizeOptionId: sizeOption.id,
+              price,
+              available: true,
             },
           });
         }
+      }
 
-        await prisma.branchMenuItemSize.create({
-          data: {
-            branchMenuItemId: branchMenuItem.id,
-            sizeOptionId: sizeOption.id,
-            price: Number(sizePrice),
-            available: true,
-          },
+      const modifierAttachmentTarget = hasSizes ? null : { menuItemId: menuItem.id };
+      if (!hasSizes) {
+        const existingModifierGroups = await prisma.modifierGroup.findMany({
+          where: { menuItemId: menuItem.id },
         });
+
+        for (const existingGroup of existingModifierGroups) {
+          await prisma.modifierGroup.delete({ where: { id: existingGroup.id } });
+        }
+
+        for (const [groupIndex, modifierGroupSeed] of (itemSeed.modifierGroups ?? []).entries()) {
+          const modifierGroup = await prisma.modifierGroup.create({
+            data: {
+              menuItemId: menuItem.id,
+              name: modifierGroupSeed.name,
+              displayOrder: groupIndex,
+              required: modifierGroupSeed.required ?? false,
+              minSelections: modifierGroupSeed.minSelections ?? 0,
+              maxSelections: modifierGroupSeed.maxSelections ?? 1,
+              active: true,
+            },
+          });
+
+          for (const [optionIndex, optionSeed] of modifierGroupSeed.options.entries()) {
+            await prisma.modifierOption.create({
+              data: {
+                modifierGroupId: modifierGroup.id,
+                name: optionSeed.name,
+                price: Number(optionSeed.price),
+                displayOrder: optionIndex,
+                active: true,
+              },
+            });
+          }
+        }
+      } else if (sizeGroup) {
+        const sizeOptions = await prisma.sizeOption.findMany({
+          where: { sizeGroupId: sizeGroup.id },
+          orderBy: { displayOrder: "asc" },
+        });
+
+        for (const sizeOption of sizeOptions) {
+          const existingModifierGroups = await prisma.modifierGroup.findMany({
+            where: { sizeOptionId: sizeOption.id },
+          });
+
+          for (const existingGroup of existingModifierGroups) {
+            await prisma.modifierGroup.delete({ where: { id: existingGroup.id } });
+          }
+
+          for (const [groupIndex, modifierGroupSeed] of (itemSeed.modifierGroups ?? []).entries()) {
+            const modifierGroup = await prisma.modifierGroup.create({
+              data: {
+                sizeOptionId: sizeOption.id,
+                name: modifierGroupSeed.name,
+                displayOrder: groupIndex,
+                required: modifierGroupSeed.required ?? false,
+                minSelections: modifierGroupSeed.minSelections ?? 0,
+                maxSelections: modifierGroupSeed.maxSelections ?? 1,
+                active: true,
+              },
+            });
+
+            for (const [optionIndex, optionSeed] of modifierGroupSeed.options.entries()) {
+              await prisma.modifierOption.create({
+                data: {
+                  modifierGroupId: modifierGroup.id,
+                  name: optionSeed.name,
+                  price: Number(optionSeed.price),
+                  displayOrder: optionIndex,
+                  active: true,
+                },
+              });
+            }
+          }
+        }
       }
     }
   }
+
+  await ensureBranchMenuItemSizes(branchMenu.id);
 
   console.log(`  ✓ Seeded branch menu for ${branchName}`);
 }

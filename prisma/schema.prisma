@@ -208,15 +208,18 @@ model MenuItem {
   displayOrder  Int      @default(0)
   featured      Boolean  @default(false)
   active        Boolean  @default(true)
+  sizeGroupId   String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   category        Category         @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  sizeGroup       SizeGroup?       @relation(fields: [sizeGroupId], references: [id], onDelete: SetNull)
   branchMenuItems BranchMenuItem[]
-  itemSizeGroups  ItemSizeGroup[]
+  modifierGroups  ModifierGroup[]
 
   @@index([categoryId])
   @@index([active])
+  @@index([sizeGroupId])
 }
 
 model SizeGroup {
@@ -227,8 +230,8 @@ model SizeGroup {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  options        SizeOption[]
-  itemSizeGroups ItemSizeGroup[]
+  menuItems MenuItem[]
+  options   SizeOption[]
 
   @@index([active])
 }
@@ -245,26 +248,50 @@ model SizeOption {
 
   sizeGroup         SizeGroup          @relation(fields: [sizeGroupId], references: [id], onDelete: Cascade)
   branchMenuItemSizes BranchMenuItemSize[]
+  modifierGroups    ModifierGroup[]
 
   @@index([sizeGroupId])
   @@index([active])
 }
 
-model ItemSizeGroup {
+model ModifierGroup {
   id            String   @id @default(cuid())
-  menuItemId    String
-  sizeGroupId   String
-  active        Boolean  @default(true)
+  menuItemId    String?
+  sizeOptionId  String?
+  name          String
   displayOrder  Int      @default(0)
+  required      Boolean  @default(false)
+  minSelections Int      @default(0)
+  maxSelections Int      @default(1)
+  active        Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  menuItem  MenuItem  @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
-  sizeGroup SizeGroup @relation(fields: [sizeGroupId], references: [id], onDelete: Cascade)
+  // Only one of menuItemId or sizeOptionId should be populated.
+  menuItem   MenuItem?   @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  sizeOption SizeOption? @relation(fields: [sizeOptionId], references: [id], onDelete: Cascade)
+  options    ModifierOption[]
 
-  @@unique([menuItemId, sizeGroupId])
   @@index([menuItemId])
-  @@index([sizeGroupId])
+  @@index([sizeOptionId])
+  @@index([active])
+}
+
+model ModifierOption {
+  id                String   @id @default(cuid())
+  modifierGroupId   String
+  name              String
+  price             Decimal  @db.Decimal(10, 2)
+  displayOrder      Int      @default(0)
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  modifierGroup    ModifierGroup     @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+  orderItemModifiers OrderItemModifier[]
+
+  @@index([modifierGroupId])
+  @@index([active])
 }
 
 model BranchMenuItem {
@@ -274,6 +301,7 @@ model BranchMenuItem {
   available             Boolean  @default(true)
   nameOverride          String?
   descriptionOverride   String?
+  basePrice             Decimal? @db.Decimal(10, 2)
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
@@ -385,9 +413,26 @@ model OrderItem {
   notes     String?
   createdAt DateTime @default(now())
 
-  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order     Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  modifiers OrderItemModifier[]
 
   @@index([orderId])
+}
+
+model OrderItemModifier {
+  id                      String   @id @default(cuid())
+  orderItemId             String
+  modifierOptionId        String?
+  modifierGroupNameSnapshot String
+  modifierOptionNameSnapshot String
+  priceSnapshot           Decimal  @db.Decimal(10, 2)
+  createdAt               DateTime @default(now())
+
+  orderItem      OrderItem       @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  modifierOption ModifierOption? @relation(fields: [modifierOptionId], references: [id], onDelete: SetNull)
+
+  @@index([orderItemId])
+  @@index([modifierOptionId])
 }
 
 model OrderStatusHistory {

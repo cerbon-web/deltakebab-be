@@ -14,12 +14,15 @@ export type MenuCategoryInput = {
     available?: boolean;
     displayOrder?: number;
     featured?: boolean;
+    basePrice?: number | null;
     sizes?: Array<{
       id: string;
       name: string;
       price: number;
       available: boolean;
+      modifierGroups?: Array<any>;
     }>;
+    modifierGroups?: Array<any>;
   }>;
 };
 
@@ -40,7 +43,9 @@ export const buildMenuCategoryViews = (categories: MenuCategoryInput[]) => {
           displayOrder: menuItem.displayOrder ?? 0,
           featured: menuItem.featured ?? false,
           available: menuItem.available ?? true,
-          sizes: menuItem.sizes ?? []
+          basePrice: menuItem.basePrice ?? 0,
+          sizes: menuItem.sizes ?? [],
+          modifierGroups: menuItem.modifierGroups ?? []
         }))
         .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || a.name.localeCompare(b.name))
     }))
@@ -82,6 +87,31 @@ export const buildMenuCategoryViews = (categories: MenuCategoryInput[]) => {
   return featuredCategory ? [featuredCategory, ...sortedCategories] : sortedCategories;
 };
 
+export const resolveMenuPricesFromDatabase = ({
+  branchMenuItemBasePrice,
+  sizePrices
+}: {
+  branchMenuItemBasePrice?: number | null;
+  sizePrices?: Array<{ sizeName: string; price: number | null | undefined }>;
+}) => {
+  const normalizedSizePrices = (sizePrices || [])
+    .filter((size) => size?.sizeName)
+    .map((size) => ({
+      name: size.sizeName,
+      price: Number(size.price ?? 0)
+    }));
+
+  const sizePriceList = normalizedSizePrices.length > 0 ? normalizedSizePrices : [];
+  const basePrice = Number(branchMenuItemBasePrice ?? 0);
+  const displayPrice = sizePriceList.length > 0 ? (sizePriceList[0]?.price ?? 0) : basePrice;
+
+  return {
+    basePrice,
+    displayPrice,
+    sizePrices: sizePriceList
+  };
+};
+
 export const getBranchMenu = async (branchId: string) => {
   const branch = await prisma.branch.findUnique({
     where: { id: branchId },
@@ -104,7 +134,39 @@ export const getBranchMenu = async (branchId: string) => {
         orderBy: { displayOrder: 'asc' },
         include: {
           items: {
-            where: { active: true }
+            where: { active: true },
+            include: {
+              sizeGroup: {
+                include: {
+                  options: {
+                    where: { active: true },
+                    orderBy: { displayOrder: 'asc' },
+                    include: {
+                      modifierGroups: {
+                        where: { active: true },
+                        include: {
+                          options: {
+                            where: { active: true },
+                            orderBy: { displayOrder: 'asc' }
+                          }
+                        },
+                        orderBy: { displayOrder: 'asc' }
+                      }
+                    }
+                  }
+                }
+              },
+              modifierGroups: {
+                where: { active: true },
+                include: {
+                  options: {
+                    where: { active: true },
+                    orderBy: { displayOrder: 'asc' }
+                  }
+                },
+                orderBy: { displayOrder: 'asc' }
+              }
+            }
           }
         }
       }
@@ -138,13 +200,52 @@ export const getBranchMenu = async (branchId: string) => {
     icon: category.icon,
     displayOrder: category.displayOrder,
     items: (category.items || []).map((menuItem: any) => {
-      const branchMenuItem = branchMenuItemMap.get(menuItem.id);
-      const sizes = (branchMenuItem?.sizes || []).map((size: any) => ({
-        id: size.id,
-        name: size.sizeOption.name,
-        price: Number(size.price),
-        available: size.available
+      const branchMenuItem = branchMenuItemMap.get(menuItem.id) as any;
+      const sizeOptions = (menuItem.sizeGroup?.options || []).map((sizeOption: any) => {
+        const sizePriceRow = (branchMenuItem?.sizes || []).find((size: any) => size.sizeOptionId === sizeOption.id);
+        const resolvedPrice = Number(sizePriceRow?.price ?? 0);
+        return {
+          id: sizeOption.id,
+          name: sizeOption.name,
+          price: resolvedPrice,
+          available: sizeOption.active !== false,
+          modifierGroups: (sizeOption.modifierGroups || []).map((group: any) => ({
+            id: group.id,
+            name: group.name,
+            required: group.required,
+            minSelections: group.minSelections,
+            maxSelections: group.maxSelections,
+            options: (group.options || []).map((option: any) => ({
+              id: option.id,
+              name: option.name,
+              price: Number(option.price ?? 0)
+            }))
+          }))
+        };
+      });
+
+      const itemModifierGroups = (menuItem.modifierGroups || []).map((group: any) => ({
+        id: group.id,
+        name: group.name,
+        required: group.required,
+        minSelections: group.minSelections,
+        maxSelections: group.maxSelections,
+        options: (group.options || []).map((option: any) => ({
+          id: option.id,
+          name: option.name,
+          price: Number(option.price ?? 0)
+        }))
       }));
+
+      const dbPriceResult = resolveMenuPricesFromDatabase({
+        branchMenuItemBasePrice: branchMenuItem?.basePrice ?? null,
+        sizePrices: sizeOptions.map((sizeOption: any) => ({
+          sizeName: sizeOption.name,
+          price: sizeOption.price
+        }))
+      });
+      const basePrice = dbPriceResult.basePrice;
+      const displayPrice = dbPriceResult.displayPrice;
 
       return {
         id: menuItem.id,
@@ -155,7 +256,10 @@ export const getBranchMenu = async (branchId: string) => {
         available: branchMenuItem?.available ?? true,
         displayOrder: menuItem.displayOrder,
         featured: menuItem.featured,
-        sizes
+        basePrice: displayPrice,
+        sizes: sizeOptions,
+        modifierGroups: itemModifierGroups,
+        price: displayPrice
       };
     })
   })));
@@ -165,7 +269,7 @@ export const getBranchMenu = async (branchId: string) => {
       ...item,
       category_id: category.id,
       category_name: category.name,
-      price: Number(item.sizes?.[0]?.price ?? 0),
+      price: Number(item.price ?? 0),
       ingredients: item.description ?? ''
     }))
   );

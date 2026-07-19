@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { buildMenuCategoryViews } = require('./menuService');
+const { buildMenuCategoryViews, resolveMenuPricesFromDatabase } = require('./menuService');
 
 const categories = [
   {
@@ -51,5 +51,19 @@ const duplicateFeaturedCategories = [
 
 const duplicateView = buildMenuCategoryViews(duplicateFeaturedCategories);
 assert.deepEqual(duplicateView[0].items.map((item: { id: string }) => item.id), ['item-1']);
+
+const dbPriceResult = resolveMenuPricesFromDatabase({
+  branchMenuItemBasePrice: 15,
+  sizePrices: [
+    { sizeName: 'STANDARD', price: 18 },
+    { sizeName: 'LARGE', price: 24 }
+  ]
+});
+assert.equal(dbPriceResult.basePrice, 15);
+assert.equal(dbPriceResult.displayPrice, 18);
+assert.deepEqual(dbPriceResult.sizePrices.map((size: { name: string; price: number }) => ({ name: size.name, price: size.price })), [
+  { name: 'STANDARD', price: 18 },
+  { name: 'LARGE', price: 24 }
+]);
 
 console.log('menu ordering tests passed');
