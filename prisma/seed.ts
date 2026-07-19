@@ -29,6 +29,7 @@ const prisma = new PrismaClient();
 type MenuSeedItem = {
   name: string;
   description: string;
+  featured?: boolean;
   prices: Record<string, number>;
 };
 
@@ -44,6 +45,7 @@ const menuSeedData: MenuSeedCategory[] = [
       {
         name: "DELTA ROLLO",
         description: "pita, mięso, surówka, sos",
+        featured: true,
         prices: { STANDARD: 18, ŚREDNIE: 24, MEGA: 30 },
       },
       {
@@ -69,22 +71,22 @@ const menuSeedData: MenuSeedCategory[] = [
       {
         name: "SUPER MEGA AMERYKAŃSKIE",
         description: "pita, 2 x mięso, ser, frytki, sos",
-        prices: { STANDARD: 25, ŚREDNIE: 32, MEGA: 44 },
+        prices: { MEGA: 44 },
       },
       {
         name: "SUPER MEGA Z SEREM",
         description: "pita, 2 x mięso, ser, surówka, sos",
-        prices: { STANDARD: 25, ŚREDNIE: 32, MEGA: 44 },
+        prices: { MEGA: 45 },
       },
       {
         name: "SUPER DELTA",
         description: "pita, mięso, ser, surówka, frytki, sos",
-        prices: { STANDARD: 25, ŚREDNIE: 32, MEGA: 44 },
+        prices: { STANDARD: 25, ŚREDNIE: 32 },
       },
       {
         name: "DELTA GREKO",
         description: "pita, mięso, sałata lodowa, cebula, oliwki, ser sałatkowy, sos łagodny",
-        prices: { STANDARD: 23, ŚREDNIE: 29, MEGA: 45 },
+        prices: { STANDARD: 23, ŚREDNIE: 29 },
       },
       {
         name: "DELTA HOT SPICY",
@@ -104,42 +106,42 @@ const menuSeedData: MenuSeedCategory[] = [
       {
         name: "TORTILLA DELTA",
         description: "tortilla, mięso, surówka, sos",
-        prices: { STANDARD: 20, ŚREDNIE: 26, MEGA: 34 },
+        prices: { STANDARD: 20, ŚREDNIE: 26, MEGA: 32 },
       },
       {
         name: "TORTILLA DELTA Z SEREM",
         description: "tortilla, ser, mięso, surówka, sos",
-        prices: { STANDARD: 22, ŚREDNIE: 28, MEGA: 36 },
+        prices: { STANDARD: 22, ŚREDNIE: 28, MEGA: 34 },
       },
       {
         name: "TORTILLA AMERYKAŃSKA",
         description: "tortilla, mięso, frytki, sos",
-        prices: { STANDARD: 22, ŚREDNIE: 28, MEGA: 36 },
+        prices: { STANDARD: 22, ŚREDNIE: 28, MEGA: 34 },
       },
       {
         name: "AMERYKAŃSKIE Z SEREM",
         description: "tortilla, mięso, frytki, ser, sos",
-        prices: { STANDARD: 24, ŚREDNIE: 30, MEGA: 40 },
+        prices: { STANDARD: 24, ŚREDNIE: 30, MEGA: 36 },
       },
       {
-        name: "SAMO MIĘSO",
+        name: "TORTILLA SAMO MIĘSO",
         description: "tortilla, mięso, sos",
-        prices: { STANDARD: 26, ŚREDNIE: 32, MEGA: 40 },
+        prices: { STANDARD: 26, ŚREDNIE: 33, MEGA: 40 },
       },
       {
         name: "TORTILLA WRAP",
         description: "tortilla, polędwiczki z kurczaka, sałata lodowa, pekinka, sos",
-        prices: { STANDARD: 23, ŚREDNIE: 29, MEGA: 33 },
+        prices: { STANDARD: 23, ŚREDNIE: 29 },
       },
       {
         name: "TORTILLA WEGE",
-        description: "tortilla, falafele, warzywa, sos (albo tortilla, falafel + frytki +2 zł)",
+        description: "tortilla, falafele, warzywa, sos",
         prices: { STANDARD: 18, ŚREDNIE: 23, MEGA: 28 },
       },
     ],
   },
   {
-    category: "KEBAB W BUŁCE",
+    category: "BUŁKA",
     items: [
       {
         name: "KEBAB W BUŁCE",
@@ -188,8 +190,8 @@ const menuSeedData: MenuSeedCategory[] = [
       },
       {
         name: "KIDS BOX",
-        description: "chicken nuggets 2 szt., chicken popsy 5 szt., frytki 80g., sos i napój",
-        prices: { STANDARD: 20 },
+        description: "chicken nuggets 2 szt, chicken popsy 5 szt, frytki 80g, sos i napój",
+        prices: { CLASSIC: 20 },
       },
     ],
   },
@@ -254,28 +256,23 @@ const menuSeedData: MenuSeedCategory[] = [
     ],
   },
   {
-    category: "O KURCZĘ! DODATKI",
+    category: "DODATKI",
     items: [
       {
-        name: "FRYTKI MAŁE",
+        name: "FRYTKI",
         description: "",
-        prices: { STANDARD: 10 },
+        prices: { MAŁE: 10, DUŻE: 19 },
       },
       {
-        name: "FRYTKI DUŻE",
+        name: "FRYTKI Z SEREM",
         description: "",
-        prices: { STANDARD: 19 },
+        prices: { MAŁE: 12, DUŻE: 22 },
       },
-      {
-        name: "MAŁE FRYTKI Z SEREM",
-        description: "",
-        prices: { STANDARD: 12 },
-      },
-      {
-        name: "DUŻE FRYTKI Z SEREM",
-        description: "",
-        prices: { STANDARD: 22 },
-      },
+    ]
+  },
+  {
+    category: "O KURCZĘ!",
+    items: [
       {
         name: "DELTOPYCHA",
         description: "polędwiczki z kurczaka 2 szt., chicken popsy 8 szt., frytki, sos",
@@ -322,6 +319,18 @@ const menuSeedData: MenuSeedCategory[] = [
         prices: { "0,33L": 7, "0,5L": 9 },
       },
       {
+        name: "PIERROT",
+        description: "330 ml",
+        prices: {
+          "Cola-Cola": 7,
+          "Pomarańczowy": 7,
+          "Lemoniada": 7,
+          "Czerwony Owoc": 7,
+          "Zielony Owoc": 7,
+          "Oranżada": 7,
+        },
+      },
+      {
         name: "MIRINDA",
         description: "",
         prices: { "0,33L": 7, "0,5L": 9 },
@@ -335,18 +344,6 @@ const menuSeedData: MenuSeedCategory[] = [
         name: "MOUNTAIN DEW",
         description: "",
         prices: { "0,33L": 7, "0,5L": 9 },
-      },
-      {
-        name: "PIERROT",
-        description: "330 ml",
-        prices: {
-          "Cola-Cola": 7,
-          "Pomarańczowy": 7,
-          "Lemoniada": 7,
-          "Czerwony Owoc": 7,
-          "Zielony Owoc": 7,
-          "Oranżada": 7,
-        },
       },
       {
         name: "WODA",
@@ -430,6 +427,7 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string) {
             name: itemSeed.name,
             description: itemSeed.description ?? null,
             displayOrder: itemIndex,
+            featured: itemSeed.featured ?? false,
             active: true,
           },
         });
@@ -439,6 +437,7 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string) {
           data: {
             description: itemSeed.description ?? null,
             displayOrder: itemIndex,
+            featured: itemSeed.featured ?? false,
             active: true,
           },
         });
