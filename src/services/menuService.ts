@@ -112,7 +112,34 @@ export const resolveMenuPricesFromDatabase = ({
   };
 };
 
-export const getBranchMenu = async (branchId: string) => {
+const findTranslation = (translations: any[] | undefined, languageCode: string) =>
+  (translations || []).find((translation) => translation.languageCode === languageCode);
+
+const translateField = (entity: any, field: string, languageCode: string) => {
+  const translation = findTranslation(entity?.translations, languageCode);
+  return translation?.[field] ?? entity?.[field];
+};
+
+const loadCategoryTranslationMap = async (categoryIds: string[], languageCode: string) => {
+  if (!categoryIds.length || languageCode === 'pl') {
+    return new Map<string, string>();
+  }
+
+  const translations = await prisma.categoryTranslation.findMany({
+    where: {
+      categoryId: { in: categoryIds },
+      languageCode
+    },
+    select: {
+      categoryId: true,
+      name: true
+    }
+  });
+
+  return new Map(translations.map((translation: any) => [translation.categoryId, translation.name]));
+};
+
+export const getBranchMenu = async (branchId: string, languageCode: string = 'pl') => {
   const branch = await prisma.branch.findUnique({
     where: { id: branchId },
     include: {
@@ -133,21 +160,38 @@ export const getBranchMenu = async (branchId: string) => {
         where: { active: true },
         orderBy: { displayOrder: 'asc' },
         include: {
+          translations: {
+            where: { languageCode },
+          },
           items: {
             where: { active: true },
             include: {
+              translations: {
+                where: { languageCode },
+              },
               sizeGroup: {
                 include: {
                   options: {
                     where: { active: true },
                     orderBy: { displayOrder: 'asc' },
                     include: {
+                      translations: {
+                        where: { languageCode },
+                      },
                       modifierGroups: {
                         where: { active: true },
                         include: {
+                          translations: {
+                            where: { languageCode },
+                          },
                           options: {
                             where: { active: true },
-                            orderBy: { displayOrder: 'asc' }
+                            orderBy: { displayOrder: 'asc' },
+                            include: {
+                              translations: {
+                                where: { languageCode },
+                              }
+                            }
                           }
                         },
                         orderBy: { displayOrder: 'asc' }
@@ -159,9 +203,17 @@ export const getBranchMenu = async (branchId: string) => {
               modifierGroups: {
                 where: { active: true },
                 include: {
+                  translations: {
+                    where: { languageCode },
+                  },
                   options: {
                     where: { active: true },
-                    orderBy: { displayOrder: 'asc' }
+                    orderBy: { displayOrder: 'asc' },
+                    include: {
+                      translations: {
+                        where: { languageCode },
+                      }
+                    }
                   }
                 },
                 orderBy: { displayOrder: 'asc' }
@@ -181,10 +233,31 @@ export const getBranchMenu = async (branchId: string) => {
     };
   }
 
+  const categoryTranslationMap = new Map<string, string>();
+  if (languageCode !== 'pl') {
+    const categoryIds = (branchMenu.categories || []).map((category: any) => category.id).filter(Boolean);
+    if (categoryIds.length > 0) {
+      const categoryTranslations = await prisma.categoryTranslation.findMany({
+        where: {
+          categoryId: { in: categoryIds },
+          languageCode
+        },
+        select: {
+          categoryId: true,
+          name: true
+        }
+      });
+      categoryTranslations.forEach((translation: any) => {
+        categoryTranslationMap.set(translation.categoryId, translation.name);
+      });
+    }
+  }
+
   const branchMenuItems = await prisma.branchMenuItem.findMany({
     where: { branchMenuId: branchMenu.id },
-    include: {
-      sizes: {
+    include: {      translations: {
+        where: { languageCode: languageCode },
+      },      sizes: {
         where: { available: true },
         include: { sizeOption: true },
         orderBy: { sizeOption: { displayOrder: 'asc' } }
@@ -196,7 +269,7 @@ export const getBranchMenu = async (branchId: string) => {
 
   const categories = buildMenuCategoryViews((branchMenu.categories || []).map((category: any) => ({
     id: category.id,
-    name: category.name,
+    name: categoryTranslationMap.get(category.id) ?? translateField(category, 'name', languageCode),
     icon: category.icon,
     displayOrder: category.displayOrder,
     items: (category.items || []).map((menuItem: any) => {
@@ -206,18 +279,19 @@ export const getBranchMenu = async (branchId: string) => {
         const resolvedPrice = Number(sizePriceRow?.price ?? 0);
         return {
           id: sizeOption.id,
-          name: sizeOption.name,
+          name: translateField(sizeOption, 'name', languageCode),
+          value: sizeOption.value,
           price: resolvedPrice,
           available: sizeOption.active !== false,
           modifierGroups: (sizeOption.modifierGroups || []).map((group: any) => ({
             id: group.id,
-            name: group.name,
+            name: translateField(group, 'name', languageCode),
             required: group.required,
             minSelections: group.minSelections,
             maxSelections: group.maxSelections,
             options: (group.options || []).map((option: any) => ({
               id: option.id,
-              name: option.name,
+              name: translateField(option, 'name', languageCode),
               price: Number(option.price ?? 0)
             }))
           }))
@@ -226,16 +300,18 @@ export const getBranchMenu = async (branchId: string) => {
 
       const itemModifierGroups = (menuItem.modifierGroups || []).map((group: any) => ({
         id: group.id,
-        name: group.name,
+        name: translateField(group, 'name', languageCode),
         required: group.required,
         minSelections: group.minSelections,
         maxSelections: group.maxSelections,
         options: (group.options || []).map((option: any) => ({
           id: option.id,
-          name: option.name,
+          name: translateField(option, 'name', languageCode),
           price: Number(option.price ?? 0)
         }))
       }));
+
+      const translatedDescription = branchMenuItem?.translations?.[0]?.descriptionOverride ?? menuItem.translations?.[0]?.description ?? branchMenuItem?.descriptionOverride ?? menuItem.description;
 
       const dbPriceResult = resolveMenuPricesFromDatabase({
         branchMenuItemBasePrice: branchMenuItem?.basePrice ?? null,
@@ -249,8 +325,8 @@ export const getBranchMenu = async (branchId: string) => {
 
       return {
         id: menuItem.id,
-        name: branchMenuItem?.nameOverride || menuItem.name,
-        description: branchMenuItem?.descriptionOverride || menuItem.description,
+        name: branchMenuItem?.translations?.[0]?.nameOverride ?? menuItem.translations?.[0]?.name ?? branchMenuItem?.nameOverride ?? menuItem.name,
+        description: translatedDescription,
         imageUrl: menuItem.imageUrl,
         active: true,
         available: branchMenuItem?.available ?? true,

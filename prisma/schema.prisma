@@ -192,8 +192,9 @@ model Category {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  menu  BranchMenu @relation(fields: [menuId], references: [id], onDelete: Cascade)
-  items MenuItem[]
+  menu         BranchMenu           @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  items        MenuItem[]
+  translations CategoryTranslation[]
 
   @@index([menuId])
   @@index([active])
@@ -216,6 +217,7 @@ model MenuItem {
   sizeGroup       SizeGroup?       @relation(fields: [sizeGroupId], references: [id], onDelete: SetNull)
   branchMenuItems BranchMenuItem[]
   modifierGroups  ModifierGroup[]
+  translations    MenuItemTranslation[]
 
   @@index([categoryId])
   @@index([active])
@@ -246,9 +248,10 @@ model SizeOption {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  sizeGroup         SizeGroup          @relation(fields: [sizeGroupId], references: [id], onDelete: Cascade)
+  sizeGroup           SizeGroup             @relation(fields: [sizeGroupId], references: [id], onDelete: Cascade)
   branchMenuItemSizes BranchMenuItemSize[]
-  modifierGroups    ModifierGroup[]
+  modifierGroups      ModifierGroup[]
+  translations        SizeOptionTranslation[]
 
   @@index([sizeGroupId])
   @@index([active])
@@ -271,6 +274,7 @@ model ModifierGroup {
   menuItem   MenuItem?   @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
   sizeOption SizeOption? @relation(fields: [sizeOptionId], references: [id], onDelete: Cascade)
   options    ModifierOption[]
+  translations ModifierGroupTranslation[]
 
   @@index([menuItemId])
   @@index([sizeOptionId])
@@ -287,8 +291,9 @@ model ModifierOption {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  modifierGroup    ModifierGroup     @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+  modifierGroup      ModifierGroup        @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
   orderItemModifiers OrderItemModifier[]
+  translations       ModifierOptionTranslation[]
 
   @@index([modifierGroupId])
   @@index([active])
@@ -305,9 +310,10 @@ model BranchMenuItem {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
-  branchMenu BranchMenu          @relation(fields: [branchMenuId], references: [id], onDelete: Cascade)
-  menuItem   MenuItem            @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  branchMenu BranchMenu                        @relation(fields: [branchMenuId], references: [id], onDelete: Cascade)
+  menuItem   MenuItem                          @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
   sizes      BranchMenuItemSize[]
+  translations BranchMenuItemTranslation[]
 
   @@unique([branchMenuId, menuItemId])
   @@index([branchMenuId])
@@ -331,6 +337,120 @@ model BranchMenuItemSize {
   @@index([branchMenuItemId])
   @@index([sizeOptionId])
   @@index([available])
+}
+
+model Language {
+  code      String                   @id
+  name      String
+  isActive  Boolean                  @default(true)
+  createdAt DateTime                 @default(now())
+  updatedAt DateTime                 @updatedAt
+
+  categoryTranslations        CategoryTranslation[]
+  menuItemTranslations        MenuItemTranslation[]
+  sizeOptionTranslations      SizeOptionTranslation[]
+  modifierGroupTranslations   ModifierGroupTranslation[]
+  modifierOptionTranslations  ModifierOptionTranslation[]
+  branchMenuItemTranslations  BranchMenuItemTranslation[]
+}
+
+model CategoryTranslation {
+  id           String   @id @default(cuid())
+  categoryId   String
+  languageCode String
+  name         String
+  description  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  language Language @relation(fields: [languageCode], references: [code], onDelete: Cascade)
+
+  @@unique([categoryId, languageCode])
+  @@index([categoryId])
+  @@index([languageCode])
+}
+
+model MenuItemTranslation {
+  id           String   @id @default(cuid())
+  menuItemId   String
+  languageCode String
+  name         String
+  description  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  language Language @relation(fields: [languageCode], references: [code], onDelete: Cascade)
+
+  @@unique([menuItemId, languageCode])
+  @@index([menuItemId])
+  @@index([languageCode])
+}
+
+model SizeOptionTranslation {
+  id           String   @id @default(cuid())
+  sizeOptionId String
+  languageCode String
+  name         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sizeOption SizeOption @relation(fields: [sizeOptionId], references: [id], onDelete: Cascade)
+  language   Language   @relation(fields: [languageCode], references: [code], onDelete: Cascade)
+
+  @@unique([sizeOptionId, languageCode])
+  @@index([sizeOptionId])
+  @@index([languageCode])
+}
+
+model ModifierGroupTranslation {
+  id              String   @id @default(cuid())
+  modifierGroupId String
+  languageCode    String
+  name            String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  modifierGroup ModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+  language      Language      @relation(fields: [languageCode], references: [code], onDelete: Cascade)
+
+  @@unique([modifierGroupId, languageCode])
+  @@index([modifierGroupId])
+  @@index([languageCode])
+}
+
+model ModifierOptionTranslation {
+  id               String   @id @default(cuid())
+  modifierOptionId String
+  languageCode     String
+  name             String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  modifierOption ModifierOption @relation(fields: [modifierOptionId], references: [id], onDelete: Cascade)
+  language       Language       @relation(fields: [languageCode], references: [code], onDelete: Cascade)
+
+  @@unique([modifierOptionId, languageCode])
+  @@index([modifierOptionId])
+  @@index([languageCode])
+}
+
+model BranchMenuItemTranslation {
+  id                   String   @id @default(cuid())
+  branchMenuItemId     String
+  languageCode         String
+  nameOverride         String?
+  descriptionOverride  String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  branchMenuItem BranchMenuItem @relation(fields: [branchMenuItemId], references: [id], onDelete: Cascade)
+  language       Language       @relation(fields: [languageCode], references: [code], onDelete: Cascade)
+
+  @@unique([branchMenuItemId, languageCode])
+  @@index([branchMenuItemId])
+  @@index([languageCode])
 }
 
 // ============================================================================
