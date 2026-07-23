@@ -114,9 +114,9 @@ const menuSeedData: MenuSeedCategory[] = [
               minSelections: 1,
               maxSelections: 1,
               options: [
-                { name: "Chicken / KURA", price: 0 },
-                { name: "Beef / WÓŁ", price: 2 },
-                { name: "Mixed / MIESZANE", price: 1 },
+                { name: "KURA", price: 0 },
+                { name: "MIESZANE", price: 1 },
+                { name: "WÓŁ", price: 2 },
               ],
             },
             {
@@ -153,9 +153,9 @@ const menuSeedData: MenuSeedCategory[] = [
               minSelections: 1,
               maxSelections: 1,
               options: [
-                { name: "Chicken / KURA", price: 0 },
-                { name: "Beef / WÓŁ", price: 2 },
-                { name: "Mixed / MIESZANE", price: 1 },
+                { name: "KURA", price: 0 },
+                { name: "WÓŁ", price: 2 },
+                { name: "MIESZANE", price: 1 },
               ],
             },
             {
@@ -192,9 +192,9 @@ const menuSeedData: MenuSeedCategory[] = [
               minSelections: 1,
               maxSelections: 1,
               options: [
-                { name: "Chicken / KURA", price: 0 },
-                { name: "Beef / WÓŁ", price: 2 },
-                { name: "Mixed / MIESZANE", price: 1 },
+                { name: "KURA", price: 0 },
+                { name: "WÓŁ", price: 2 },
+                { name: "MIESZANE", price: 1 },
               ],
             },
             {
