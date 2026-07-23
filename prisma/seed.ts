@@ -39,6 +39,7 @@ type MenuSeedItem = {
   prices?: Record<string, number>;
   hasSizes?: boolean;
   modifierGroups?: MenuSeedModifierGroup[];
+  modifierGroupsBySize?: Record<string, MenuSeedModifierGroup[]>;
 };
 
 type MenuSeedCategory = {
@@ -105,41 +106,125 @@ const menuSeedData: MenuSeedCategory[] = [
         description: "pita, mięso, surówka, sos",
         featured: true,
         prices: { STANDARD: 18, ŚREDNIE: 24, MEGA: 30 },
-        modifierGroups: [
-          {
-            name: "Choose Meat",
-            required: true,
-            minSelections: 1,
-            maxSelections: 1,
-            options: [
-              { name: "Chicken", price: 0 },
-              { name: "Beef", price: 2 },
-              { name: "Mixed", price: 3 },
-            ],
-          },
-          {
-            name: "Extras",
-            required: false,
-            minSelections: 0,
-            maxSelections: 3,
-            options: [
-              { name: "Extra Meat", price: 3 },
-              { name: "Extra Cheese", price: 2 },
-              { name: "Extra Vegetables", price: 1 },
-            ],
-          },
-          {
-            name: "Sauces",
-            required: false,
-            minSelections: 0,
-            maxSelections: 2,
-            options: [
-              { name: "Garlic", price: 0 },
-              { name: "Spicy", price: 0 },
-              { name: "BBQ", price: 0 },
-            ],
-          },
-        ],
+        modifierGroupsBySize: {
+          STANDARD: [
+            {
+              name: "Choose Meat",
+              required: true,
+              minSelections: 1,
+              maxSelections: 1,
+              options: [
+                { name: "Chicken / KURA", price: 0 },
+                { name: "Beef / WÓŁ", price: 2 },
+                { name: "Mixed / MIESZANE", price: 1 },
+              ],
+            },
+            {
+              name: "Extra sauces (one sauce included free; add up to 3 extra)",
+              required: false,
+              minSelections: 0,
+              maxSelections: 3,
+              options: [
+                { name: "Czosnkowy", price: 2 },
+                { name: "Łagodny", price: 2 },
+                { name: "Ketchup", price: 2 },
+                { name: "Ostry", price: 2 },
+                { name: "Barbecue", price: 3 },
+                { name: "Koperkowy", price: 3 },
+                { name: "Mix (Mieszane)", price: 3 },
+              ],
+            },
+            {
+              name: "Extras",
+              required: false,
+              minSelections: 0,
+              maxSelections: 3,
+              options: [
+                { name: "Warzywa", price: 3 },
+                { name: "Ser", price: 3 },
+                { name: "Dodatkowe mięso", price: 8 },
+              ],
+            },
+          ],
+          ŚREDNIE: [
+            {
+              name: "Choose Meat",
+              required: true,
+              minSelections: 1,
+              maxSelections: 1,
+              options: [
+                { name: "Chicken / KURA", price: 0 },
+                { name: "Beef / WÓŁ", price: 2 },
+                { name: "Mixed / MIESZANE", price: 1 },
+              ],
+            },
+            {
+              name: "Extra sauces (one sauce included free; add up to 3 extra)",
+              required: false,
+              minSelections: 0,
+              maxSelections: 3,
+              options: [
+                { name: "Czosnkowy", price: 2 },
+                { name: "Łagodny", price: 2 },
+                { name: "Ketchup", price: 2 },
+                { name: "Ostry", price: 2 },
+                { name: "Barbecue", price: 3 },
+                { name: "Koperkowy", price: 3 },
+                { name: "Mix (Mieszane)", price: 3 },
+              ],
+            },
+            {
+              name: "Extras",
+              required: false,
+              minSelections: 0,
+              maxSelections: 3,
+              options: [
+                { name: "Warzywa", price: 3 },
+                { name: "Ser", price: 3 },
+                { name: "Dodatkowe mięso", price: 8 },
+              ],
+            },
+          ],
+          MEGA: [
+            {
+              name: "Choose Meat",
+              required: true,
+              minSelections: 1,
+              maxSelections: 1,
+              options: [
+                { name: "Chicken / KURA", price: 0 },
+                { name: "Beef / WÓŁ", price: 2 },
+                { name: "Mixed / MIESZANE", price: 1 },
+              ],
+            },
+            {
+              name: "Extra sauces (one sauce included free; add up to 3 extra)",
+              required: false,
+              minSelections: 0,
+              maxSelections: 3,
+              options: [
+                { name: "Czosnkowy", price: 2 },
+                { name: "Łagodny", price: 2 },
+                { name: "Ketchup", price: 2 },
+                { name: "Ostry", price: 2 },
+                { name: "Barbecue", price: 3 },
+                { name: "Koperkowy", price: 3 },
+                { name: "Mix (Mieszane)", price: 3 },
+              ],
+            },
+            {
+              name: "Extras",
+              required: false,
+              minSelections: 0,
+              maxSelections: 3,
+              options: [
+                { name: "Warzywa", price: 5 },
+                { name: "Ser", price: 5 },
+                { name: "Dodatkowe mięso", price: 8 },
+              ],
+            },
+          ],
+        },
       },
       {
         name: "ROLLO DELTA Z SEREM",
@@ -796,7 +881,11 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string) {
             await prisma.modifierGroup.delete({ where: { id: existingGroup.id } });
           }
 
-          for (const [groupIndex, modifierGroupSeed] of (itemSeed.modifierGroups ?? []).entries()) {
+          const modifierGroupsForSize =
+            itemSeed.modifierGroupsBySize?.[sizeOption.name] ??
+            itemSeed.modifierGroups ?? [];
+
+          for (const [groupIndex, modifierGroupSeed] of modifierGroupsForSize.entries()) {
             const modifierGroup = await prisma.modifierGroup.create({
               data: {
                 sizeOptionId: sizeOption.id,
