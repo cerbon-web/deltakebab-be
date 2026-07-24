@@ -21,6 +21,7 @@ const prisma = new PrismaClient();
 type MenuSeedModifierOption = {
   name: string;
   price: number;
+  defaultSelected?: boolean;
 };
 
 type MenuSeedModifierGroup = {
@@ -340,9 +341,13 @@ const descriptionTranslations: Record<string, Partial<Record<LanguageCode, strin
 
 const modifierGroupTranslations: Record<string, Partial<Record<LanguageCode, string>>> = {
   'Wybierz mięso': { en: 'Choose Meat', uk: 'Оберіть м’ясо' },
-  'Dodatkowe sosy (jeden sos w cenie; dodaj do 3 dodatkowych)': {
-    en: 'Extra sauces (one sauce included free; add up to 3 extra)',
-    uk: 'Додаткові соуси (один соус включено безкоштовно; додайте до 3 додаткових)',
+  'Sosy (maksymalnie można wybrać 3 sosy)': {
+    en: 'Sauces (maximum 3 sauces can be selected)',
+    uk: 'Соуси (можна вибрати до 3 соусів)',
+  },
+  'Sauces (maximum 3 sauces can be selected)': {
+    pl: 'Sosy (maksymalnie można wybrać 3 sosy)',
+    uk: 'Соуси (можна вибрати до 3 соусів)',
   },
   Dodatki: { en: 'Extras', uk: 'Додатки' },
   Temperatura: { en: 'Temperature', uk: 'Температура' },
@@ -358,7 +363,7 @@ const modifierOptionTranslations: Record<string, Partial<Record<LanguageCode, st
   Ostry: { en: 'Hot', uk: 'Гострий' },
   Barbecue: { en: 'Barbecue', uk: 'Барбекю' },
   Koperkowy: { en: 'Dill', uk: 'З кропом' },
-  'Mix (Mieszane)': { en: 'Mix', uk: 'Мікс' },
+  'Mieszane': { en: 'Mix', uk: 'Мікс' },
   Warzywa: { en: 'Vegetables', uk: 'Овочі' },
   Ser: { en: 'Cheese', uk: 'Сир' },
   'Dodatkowe mięso': { en: 'Extra meat', uk: 'Додаткове м’ясо' },
@@ -685,24 +690,24 @@ const menuSeedData: MenuSeedCategory[] = [
               minSelections: 1,
               maxSelections: 1,
               options: [
-                { name: "KURA", price: 0 },
+                { name: "KURA", price: 0, defaultSelected: true },
                 { name: "MIESZANE", price: 1 },
                 { name: "WÓŁ", price: 2 },
               ],
             },
             {
-              name: "Dodatkowe sosy (jeden sos w cenie; dodaj do 3 dodatkowych)",
+              name: "Sosy (maksymalnie można wybrać 3 sosy)",
               required: false,
               minSelections: 0,
               maxSelections: 3,
               options: [
-                { name: "Czosnkowy", price: 2 },
-                { name: "Łagodny", price: 2 },
-                { name: "Ketchup", price: 2 },
-                { name: "Ostry", price: 2 },
-                { name: "Barbecue", price: 3 },
-                { name: "Koperkowy", price: 3 },
-                { name: "Mix (Mieszane)", price: 3 },
+                { name: "Czosnkowy", price: 0 },
+                { name: "Łagodny", price: 0, defaultSelected: true },
+                { name: "Ketchup", price: 0 },
+                { name: "Ostry", price: 0, defaultSelected: true },
+                { name: "Barbecue", price: 1 },
+                { name: "Koperkowy", price: 1 },
+                { name: "Mieszane", price: 1 },
               ],
             },
             {
@@ -719,33 +724,33 @@ const menuSeedData: MenuSeedCategory[] = [
           ],
           MEDIUM: [
             {
-              name: "Choose Meat",
+              name: "Wybierz mięso",
               required: true,
               minSelections: 1,
               maxSelections: 1,
               options: [
-                { name: "KURA", price: 0 },
-                { name: "WÓŁ", price: 2 },
+                { name: "KURA", price: 0, defaultSelected: true },
                 { name: "MIESZANE", price: 1 },
+                { name: "WÓŁ", price: 2 },
               ],
             },
             {
-              name: "Extra sauces (one sauce included free; add up to 3 extra)",
+              name: "Sosy (maksymalnie można wybrać 3 sosy)",
               required: false,
               minSelections: 0,
               maxSelections: 3,
               options: [
-                { name: "Czosnkowy", price: 2 },
-                { name: "Łagodny", price: 2 },
-                { name: "Ketchup", price: 2 },
-                { name: "Ostry", price: 2 },
-                { name: "Barbecue", price: 3 },
-                { name: "Koperkowy", price: 3 },
-                { name: "Mix (Mieszane)", price: 3 },
+                { name: "Czosnkowy", price: 0 },
+                { name: "Łagodny", price: 0, defaultSelected: true },
+                { name: "Ketchup", price: 0 },
+                { name: "Ostry", price: 0, defaultSelected: true },
+                { name: "Barbecue", price: 1 },
+                { name: "Koperkowy", price: 1 },
+                { name: "Mieszane", price: 1 },
               ],
             },
             {
-              name: "Extras",
+              name: "Dodatki",
               required: false,
               minSelections: 0,
               maxSelections: 3,
@@ -763,28 +768,28 @@ const menuSeedData: MenuSeedCategory[] = [
               minSelections: 1,
               maxSelections: 1,
               options: [
-                { name: "KURA", price: 0 },
-                { name: "WÓŁ", price: 2 },
+                { name: "KURA", price: 0, defaultSelected: true },
                 { name: "MIESZANE", price: 1 },
+                { name: "WÓŁ", price: 2 },
               ],
             },
             {
-              name: "Dodatkowe sosy (jeden sos w cenie; dodaj do 3 dodatkowych)",
+              name: "Sosy (maksymalnie można wybrać 3 sosy)",
               required: false,
               minSelections: 0,
               maxSelections: 3,
               options: [
-                { name: "Czosnkowy", price: 2 },
-                { name: "Łagodny", price: 2 },
-                { name: "Ketchup", price: 2 },
-                { name: "Ostry", price: 2 },
-                { name: "Barbecue", price: 3 },
-                { name: "Koperkowy", price: 3 },
-                { name: "Mix (Mieszane)", price: 3 },
+                { name: "Czosnkowy", price: 0 },
+                { name: "Łagodny", price: 0, defaultSelected: true },
+                { name: "Ketchup", price: 0 },
+                { name: "Ostry", price: 0, defaultSelected: true },
+                { name: "Barbecue", price: 1 },
+                { name: "Koperkowy", price: 1 },
+                { name: "Mieszane", price: 1 },
               ],
             },
             {
-              name: "Extras",
+              name: "Dodatki",
               required: false,
               minSelections: 0,
               maxSelections: 3,
@@ -1450,6 +1455,7 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string) {
                 modifierGroupId: modifierGroup.id,
                 name: optionSeed.name,
                 price: Number(optionSeed.price),
+                defaultSelected: Boolean(optionSeed.defaultSelected),
                 displayOrder: optionIndex,
                 active: true,
               },
@@ -1500,6 +1506,7 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string) {
                   modifierGroupId: modifierGroup.id,
                   name: optionSeed.name,
                   price: Number(optionSeed.price),
+                  defaultSelected: Boolean(optionSeed.defaultSelected),
                   displayOrder: optionIndex,
                   active: true,
                 },

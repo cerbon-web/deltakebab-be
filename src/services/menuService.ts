@@ -292,7 +292,8 @@ export const getBranchMenu = async (branchId: string, languageCode: string = 'pl
             options: (group.options || []).map((option: any) => ({
               id: option.id,
               name: translateField(option, 'name', languageCode),
-              price: Number(option.price ?? 0)
+              price: Number(option.price ?? 0),
+              defaultSelected: Boolean(option.defaultSelected)
             }))
           }))
         };
@@ -307,7 +308,8 @@ export const getBranchMenu = async (branchId: string, languageCode: string = 'pl
         options: (group.options || []).map((option: any) => ({
           id: option.id,
           name: translateField(option, 'name', languageCode),
-          price: Number(option.price ?? 0)
+          price: Number(option.price ?? 0),
+          defaultSelected: Boolean(option.defaultSelected)
         }))
       }));
 

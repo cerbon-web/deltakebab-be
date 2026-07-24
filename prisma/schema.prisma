@@ -286,6 +286,7 @@ model ModifierOption {
   modifierGroupId   String
   name              String
   price             Decimal  @db.Decimal(10, 2)
+  defaultSelected   Boolean  @default(false)
   displayOrder      Int      @default(0)
   active            Boolean  @default(true)
   createdAt         DateTime @default(now())
