@@ -422,34 +422,108 @@ const getSizeOptionFallbackLabel = (sizeName: string) => {
   return getSizeLabel(stableValue, 'pl');
 };
 
-const upsertCategoryTranslations = async (categoryId: string, categoryName: string) => {
-  for (const language of languages) {
-    if (language.code === "pl") {
-      continue;
-    }
+const buildDeltaRollLikeModifierGroups = ({
+  includeMeat = true,
+  extraPrice = 3,
+}: {
+  includeMeat?: boolean;
+  extraPrice?: number;
+}) => {
+  const groups: MenuSeedModifierGroup[] = [];
 
-    const translatedName = categoryTranslations[categoryName]?.[language.code];
-    if (!translatedName) {
-      continue;
-    }
-
-    await prisma.categoryTranslation.upsert({
-      where: {
-        categoryId_languageCode: {
-          categoryId,
-          languageCode: language.code,
-        },
-      },
-      create: {
-        categoryId,
-        languageCode: language.code,
-        name: translatedName,
-      },
-      update: {
-        name: translatedName,
-      },
+  if (includeMeat) {
+    groups.push({
+      name: "Wybierz mięso",
+      required: true,
+      minSelections: 1,
+      maxSelections: 1,
+      options: [
+        { name: "KURA", price: 0, defaultSelected: true },
+        { name: "MIESZANE", price: 1 },
+        { name: "WÓŁ", price: 2 },
+      ],
     });
   }
+
+  groups.push({
+    name: "Sosy (maksymalnie można wybrać 3 sosy)",
+    required: false,
+    minSelections: 0,
+    maxSelections: 3,
+    options: [
+      { name: "Czosnkowy", price: 0 },
+      { name: "Łagodny", price: 0, defaultSelected: true },
+      { name: "Ketchup", price: 0 },
+      { name: "Ostry", price: 0, defaultSelected: true },
+      { name: "Barbecue", price: 1 },
+      { name: "Koperkowy", price: 1 },
+      { name: "Mieszane", price: 1 },
+    ],
+  });
+
+  groups.push({
+    name: "Dodatki",
+    required: false,
+    minSelections: 0,
+    maxSelections: 3,
+    options: [
+      { name: "Warzywa", price: extraPrice },
+      { name: "Ser", price: extraPrice },
+      ...(includeMeat ? [{ name: "Dodatkowe mięso", price: 8 }] : []),
+    ],
+  });
+
+  return groups;
+};
+
+const buildDeltaRollLikeModifierGroupsBySizes = ({
+  sizes,
+  includeMeat = true,
+  extraPrice = 3,
+  megaExtraPrice = 5,
+}: {
+  sizes: string[];
+  includeMeat?: boolean;
+  extraPrice?: number;
+  megaExtraPrice?: number;
+}) => {
+  return sizes.reduce<Record<string, MenuSeedModifierGroup[]>>((groupsBySize, size) => {
+    groupsBySize[size] = buildDeltaRollLikeModifierGroups({
+      includeMeat,
+      extraPrice: size === "MEGA" ? megaExtraPrice : extraPrice,
+    });
+    return groupsBySize;
+  }, {});
+};
+
+const upsertCategoryTranslations = async (categoryId: string, categoryName: string) => {
+  await Promise.all(
+    languages
+      .filter((language) => language.code !== "pl")
+      .map(async (language) => {
+        const translatedName = categoryTranslations[categoryName]?.[language.code];
+        if (!translatedName) {
+          return;
+        }
+
+        await prisma.categoryTranslation.upsert({
+          where: {
+            categoryId_languageCode: {
+              categoryId,
+              languageCode: language.code,
+            },
+          },
+          create: {
+            categoryId,
+            languageCode: language.code,
+            name: translatedName,
+          },
+          update: {
+            name: translatedName,
+          },
+        });
+      })
+  );
 };
 
 const upsertMenuItemTranslations = async (
@@ -457,39 +531,39 @@ const upsertMenuItemTranslations = async (
   itemName: string,
   itemDescription?: string | null
 ) => {
-  for (const language of languages) {
-    if (language.code === "pl") {
-      continue;
-    }
+  await Promise.all(
+    languages
+      .filter((language) => language.code !== "pl")
+      .map(async (language) => {
+        const rawTranslation = menuItemTranslations[itemName]?.[language.code];
+        const translation = normalizeMenuItemTranslation(rawTranslation);
+        const translatedDescription =
+          translation?.description ?? descriptionTranslations[itemName]?.[language.code] ?? null;
 
-    const rawTranslation = menuItemTranslations[itemName]?.[language.code];
-    const translation = normalizeMenuItemTranslation(rawTranslation);
-    const translatedDescription =
-      translation?.description ?? descriptionTranslations[itemName]?.[language.code] ?? null;
+        if (!translation) {
+          return;
+        }
 
-    if (!translation) {
-      continue;
-    }
-
-    await prisma.menuItemTranslation.upsert({
-      where: {
-        menuItemId_languageCode: {
-          menuItemId,
-          languageCode: language.code,
-        },
-      },
-      create: {
-        menuItemId,
-        languageCode: language.code,
-        name: translation.name,
-        description: translatedDescription ?? itemDescription ?? null,
-      },
-      update: {
-        name: translation.name,
-        description: translatedDescription ?? itemDescription ?? null,
-      },
-    });
-  }
+        await prisma.menuItemTranslation.upsert({
+          where: {
+            menuItemId_languageCode: {
+              menuItemId,
+              languageCode: language.code,
+            },
+          },
+          create: {
+            menuItemId,
+            languageCode: language.code,
+            name: translation.name,
+            description: translatedDescription ?? itemDescription ?? null,
+          },
+          update: {
+            name: translation.name,
+            description: translatedDescription ?? itemDescription ?? null,
+          },
+        });
+      })
+  );
 };
 
 const upsertSizeOptionTranslations = async (sizeOptionId: string, sizeValue: string) => {
@@ -498,99 +572,99 @@ const upsertSizeOptionTranslations = async (sizeOptionId: string, sizeValue: str
     return;
   }
 
-  for (const language of languages) {
-    if (language.code === "pl") {
-      continue;
-    }
+  await Promise.all(
+    languages
+      .filter((language) => language.code !== "pl")
+      .map(async (language) => {
+        const translation = translations[language.code];
+        if (!translation) {
+          return;
+        }
 
-    const translation = translations[language.code];
-    if (!translation) {
-      continue;
-    }
-
-    await prisma.sizeOptionTranslation.upsert({
-      where: {
-        sizeOptionId_languageCode: {
-          sizeOptionId,
-          languageCode: language.code,
-        },
-      },
-      create: {
-        sizeOptionId,
-        languageCode: language.code,
-        name: translation,
-      },
-      update: {
-        name: translation,
-      },
-    });
-  }
+        await prisma.sizeOptionTranslation.upsert({
+          where: {
+            sizeOptionId_languageCode: {
+              sizeOptionId,
+              languageCode: language.code,
+            },
+          },
+          create: {
+            sizeOptionId,
+            languageCode: language.code,
+            name: translation,
+          },
+          update: {
+            name: translation,
+          },
+        });
+      })
+  );
 };
 
 const upsertModifierGroupTranslations = async (
   modifierGroupId: string,
   modifierGroupName: string
 ) => {
-  for (const language of languages) {
-    if (language.code === "pl") {
-      continue;
-    }
+  await Promise.all(
+    languages
+      .filter((language) => language.code !== "pl")
+      .map(async (language) => {
+        const translation = modifierGroupTranslations[modifierGroupName]?.[language.code];
+        if (!translation) {
+          return;
+        }
 
-    const translation = modifierGroupTranslations[modifierGroupName]?.[language.code];
-    if (!translation) {
-      continue;
-    }
-
-    await prisma.modifierGroupTranslation.upsert({
-      where: {
-        modifierGroupId_languageCode: {
-          modifierGroupId,
-          languageCode: language.code,
-        },
-      },
-      create: {
-        modifierGroupId,
-        languageCode: language.code,
-        name: translation,
-      },
-      update: {
-        name: translation,
-      },
-    });
-  }
+        await prisma.modifierGroupTranslation.upsert({
+          where: {
+            modifierGroupId_languageCode: {
+              modifierGroupId,
+              languageCode: language.code,
+            },
+          },
+          create: {
+            modifierGroupId,
+            languageCode: language.code,
+            name: translation,
+          },
+          update: {
+            name: translation,
+          },
+        });
+      })
+  );
 };
 
 const upsertModifierOptionTranslations = async (
   modifierOptionId: string,
   modifierOptionName: string
 ) => {
-  for (const language of languages) {
-    if (language.code === "pl") {
-      continue;
-    }
+  await Promise.all(
+    languages
+      .filter((language) => language.code !== "pl")
+      .map(async (language) => {
+        const translation = modifierOptionTranslations[modifierOptionName]?.[language.code];
+        if (!translation) {
+          return;
+        }
 
-    const translation = modifierOptionTranslations[modifierOptionName]?.[language.code];
-    if (!translation) {
-      continue;
-    }
-
-    await prisma.modifierOptionTranslation.upsert({
-      where: {
-        modifierOptionId_languageCode: {
-          modifierOptionId,
-          languageCode: language.code,
-        },
-      },
-      create: {
-        modifierOptionId,
-        languageCode: language.code,
-        name: translation,
-      },
-      update: {
-        name: translation,
-      },
-    });
-  }
+        await prisma.modifierOptionTranslation.upsert({
+          where: {
+            modifierOptionId_languageCode: {
+              modifierOptionId,
+              languageCode: language.code,
+            },
+          },
+          create: {
+            modifierOptionId,
+            languageCode: language.code,
+            name: translation,
+          },
+          update: {
+            name: translation,
+          },
+        });
+      })
+  );
 };
 
 const upsertBranchMenuItemTranslations = async (
@@ -598,40 +672,40 @@ const upsertBranchMenuItemTranslations = async (
   nameOverride: string,
   descriptionOverride?: string | null
 ) => {
-  for (const language of languages) {
-    if (language.code === "pl") {
-      continue;
-    }
+  await Promise.all(
+    languages
+      .filter((language) => language.code !== "pl")
+      .map(async (language) => {
+        const rawTranslation = menuItemTranslations[nameOverride]?.[language.code];
+        const translation = normalizeMenuItemTranslation(rawTranslation);
+        const translatedName = translation?.name;
+        const translatedDescription =
+          translation?.description ?? descriptionTranslations[nameOverride]?.[language.code] ?? null;
 
-    const rawTranslation = menuItemTranslations[nameOverride]?.[language.code];
-    const translation = normalizeMenuItemTranslation(rawTranslation);
-    const translatedName = translation?.name;
-    const translatedDescription =
-      translation?.description ?? descriptionTranslations[nameOverride]?.[language.code] ?? null;
+        if (!translatedName && !translatedDescription) {
+          return;
+        }
 
-    if (!translatedName && !translatedDescription) {
-      continue;
-    }
-
-    await prisma.branchMenuItemTranslation.upsert({
-      where: {
-        branchMenuItemId_languageCode: {
-          branchMenuItemId,
-          languageCode: language.code,
-        },
-      },
-      create: {
-        branchMenuItemId,
-        languageCode: language.code,
-        nameOverride: translatedName ?? nameOverride,
-        descriptionOverride: translatedDescription ?? descriptionOverride,
-      },
-      update: {
-        nameOverride: translatedName ?? nameOverride,
-        descriptionOverride: translatedDescription ?? descriptionOverride,
-      },
-    });
-  }
+        await prisma.branchMenuItemTranslation.upsert({
+          where: {
+            branchMenuItemId_languageCode: {
+              branchMenuItemId,
+              languageCode: language.code,
+            },
+          },
+          create: {
+            branchMenuItemId,
+            languageCode: language.code,
+            nameOverride: translatedName ?? nameOverride,
+            descriptionOverride: translatedDescription ?? descriptionOverride,
+          },
+          update: {
+            nameOverride: translatedName ?? nameOverride,
+            descriptionOverride: translatedDescription ?? descriptionOverride,
+          },
+        });
+      })
+  );
 };
 
 export const buildBranchMenuItemSizePayloads = ({
@@ -806,51 +880,91 @@ const menuSeedData: MenuSeedCategory[] = [
         name: "ROLLO DELTA Z SEREM",
         description: "pita, ser, mięso, surówka, sos",
         prices: { STANDARD: 20, MEDIUM: 26, MEGA: 32 },
+        modifierGroupsBySize: buildDeltaRollLikeModifierGroupsBySizes({
+          sizes: ["STANDARD", "MEDIUM", "MEGA"],
+          includeMeat: true,
+        }),
       },
       {
         name: "AMERYKAŃSKIE",
         description: "pita, mięso, frytki, sos",
         prices: { STANDARD: 20, MEDIUM: 26, MEGA: 32 },
+        modifierGroupsBySize: buildDeltaRollLikeModifierGroupsBySizes({
+          sizes: ["STANDARD", "MEDIUM", "MEGA"],
+          includeMeat: true,
+        }),
       },
       {
         name: "AMERYKAŃSKIE Z SEREM",
         description: "pita, mięso, frytki, ser, sos",
         prices: { STANDARD: 24, MEDIUM: 30, MEGA: 37 },
+        modifierGroupsBySize: buildDeltaRollLikeModifierGroupsBySizes({
+          sizes: ["STANDARD", "MEDIUM", "MEGA"],
+          includeMeat: true,
+        }),
       },
       {
         name: "ROLLO SAMO MIĘSO",
         description: "pita, mięso, sos",
         prices: { STANDARD: 25, MEDIUM: 32, MEGA: 39 },
+        modifierGroupsBySize: buildDeltaRollLikeModifierGroupsBySizes({
+          sizes: ["STANDARD", "MEDIUM", "MEGA"],
+          includeMeat: true,
+        }),
       },
       {
         name: "SUPER MEGA AMERYKAŃSKIE",
         description: "pita, 2 x mięso, ser, frytki, sos",
         prices: { MEGA: 44 },
+        modifierGroups: buildDeltaRollLikeModifierGroups({
+          includeMeat: true,
+          extraPrice: 5,
+        }),
       },
       {
         name: "SUPER MEGA Z SEREM",
         description: "pita, 2 x mięso, ser, surówka, sos",
         prices: { MEGA: 45 },
+        modifierGroups: buildDeltaRollLikeModifierGroups({
+          includeMeat: true,
+          extraPrice: 5,
+        }),
       },
       {
         name: "SUPER DELTA",
         description: "pita, mięso, ser, surówka, frytki, sos",
         prices: { STANDARD: 25, MEDIUM: 32 },
+        modifierGroupsBySize: buildDeltaRollLikeModifierGroupsBySizes({
+          sizes: ["STANDARD", "MEDIUM"],
+          includeMeat: true,
+        }),
       },
       {
         name: "DELTA GREKO",
         description: "pita, mięso, sałata lodowa, cebula, oliwki, ser sałatkowy, sos łagodny",
         prices: { STANDARD: 23, MEDIUM: 29 },
+        modifierGroupsBySize: buildDeltaRollLikeModifierGroupsBySizes({
+          sizes: ["STANDARD", "MEDIUM"],
+          includeMeat: true,
+        }),
       },
       {
         name: "DELTA HOT SPICY",
         description: "mięso, papryka mix, jalapeño, sos ostry",
         prices: { STANDARD: 23, MEDIUM: 29 },
+        modifierGroupsBySize: buildDeltaRollLikeModifierGroupsBySizes({
+          sizes: ["STANDARD", "MEDIUM"],
+          includeMeat: true,
+        }),
       },
       {
         name: "DELTA SZPINAK",
         description: "pita, mięso, szpinak, ser, sos",
         prices: { STANDARD: 22, MEDIUM: 28 },
+        modifierGroupsBySize: buildDeltaRollLikeModifierGroupsBySizes({
+          sizes: ["STANDARD", "MEDIUM"],
+          includeMeat: true,
+        }),
       },
     ],
   },
@@ -861,36 +975,64 @@ const menuSeedData: MenuSeedCategory[] = [
         name: "TORTILLA DELTA",
         description: "tortilla, mięso, surówka, sos",
         prices: { STANDARD: 20, MEDIUM: 26, MEGA: 32 },
+        modifierGroupsBySize: buildDeltaRollLikeModifierGroupsBySizes({
+          sizes: ["STANDARD", "MEDIUM", "MEGA"],
+          includeMeat: true,
+        }),
       },
       {
         name: "TORTILLA DELTA Z SEREM",
         description: "tortilla, ser, mięso, surówka, sos",
         prices: { STANDARD: 22, MEDIUM: 28, MEGA: 34 },
+        modifierGroupsBySize: buildDeltaRollLikeModifierGroupsBySizes({
+          sizes: ["STANDARD", "MEDIUM", "MEGA"],
+          includeMeat: true,
+        }),
       },
       {
         name: "TORTILLA AMERYKAŃSKA",
         description: "tortilla, mięso, frytki, sos",
         prices: { STANDARD: 22, MEDIUM: 28, MEGA: 34 },
+        modifierGroupsBySize: buildDeltaRollLikeModifierGroupsBySizes({
+          sizes: ["STANDARD", "MEDIUM", "MEGA"],
+          includeMeat: true,
+        }),
       },
       {
         name: "AMERYKAŃSKIE Z SEREM",
         description: "tortilla, mięso, frytki, ser, sos",
         prices: { STANDARD: 24, MEDIUM: 30, MEGA: 36 },
+        modifierGroupsBySize: buildDeltaRollLikeModifierGroupsBySizes({
+          sizes: ["STANDARD", "MEDIUM", "MEGA"],
+          includeMeat: true,
+        }),
       },
       {
         name: "TORTILLA SAMO MIĘSO",
         description: "tortilla, mięso, sos",
         prices: { STANDARD: 26, MEDIUM: 33, MEGA: 40 },
+        modifierGroupsBySize: buildDeltaRollLikeModifierGroupsBySizes({
+          sizes: ["STANDARD", "MEDIUM", "MEGA"],
+          includeMeat: true,
+        }),
       },
       {
         name: "TORTILLA WRAP",
         description: "tortilla, polędwiczki z kurczaka, sałata lodowa, pekinka, sos",
         prices: { STANDARD: 23, MEDIUM: 29 },
+        modifierGroupsBySize: buildDeltaRollLikeModifierGroupsBySizes({
+          sizes: ["STANDARD", "MEDIUM"],
+          includeMeat: false,
+        }),
       },
       {
         name: "TORTILLA WEGE",
         description: "tortilla, falafele, warzywa, sos",
         prices: { STANDARD: 18, MEDIUM: 23, MEGA: 28 },
+        modifierGroupsBySize: buildDeltaRollLikeModifierGroupsBySizes({
+          sizes: ["STANDARD", "MEDIUM", "MEGA"],
+          includeMeat: false,
+        }),
       },
     ],
   },
@@ -901,31 +1043,53 @@ const menuSeedData: MenuSeedCategory[] = [
         name: "KEBAB W BUŁCE",
         description: "bułka, mięso, warzywa, sos",
         prices: { STANDARD: 24, MEDIUM: 30, MEGA: 36 },
+        modifierGroupsBySize: buildDeltaRollLikeModifierGroupsBySizes({
+          sizes: ["STANDARD", "MEDIUM", "MEGA"],
+          includeMeat: true,
+        }),
       },
       {
         name: "BUŁKA AMERYKAŃSKA",
         description: "bułka, mięso, frytki, sos",
         prices: { STANDARD: 26, MEDIUM: 31, MEGA: 37 },
+        modifierGroupsBySize: buildDeltaRollLikeModifierGroupsBySizes({
+          sizes: ["STANDARD", "MEDIUM", "MEGA"],
+          includeMeat: true,
+        }),
       },
       {
         name: "DELTA SUPER BUŁKA",
         description: "bułka, mięso, warzywa, frytki, ser, sos",
         prices: { STANDARD: 30, MEDIUM: 35, MEGA: 40 },
+        modifierGroupsBySize: buildDeltaRollLikeModifierGroupsBySizes({
+          sizes: ["STANDARD", "MEDIUM", "MEGA"],
+          includeMeat: true,
+        }),
       },
       {
         name: "BUŁKA SAMO MIĘSO",
         description: "bułka, mięso, sos",
         prices: { STANDARD: 30, MEDIUM: 35, MEGA: 40 },
+        modifierGroupsBySize: buildDeltaRollLikeModifierGroupsBySizes({
+          sizes: ["STANDARD", "MEDIUM", "MEGA"],
+          includeMeat: true,
+        }),
       },
       {
         name: "BUŁKA WEGE",
         description: "bułka, falafele, warzywa, sos",
         prices: { STANDARD: 22 },
+        modifierGroups: buildDeltaRollLikeModifierGroups({
+          includeMeat: false,
+        }),
       },
       {
         name: "BUŁKA BERLIN",
         description: "bułka berlińska, mięso, warzywa, sos",
         prices: { STANDARD: 26 },
+        modifierGroups: buildDeltaRollLikeModifierGroups({
+          includeMeat: true,
+        }),
       },
     ],
   },
@@ -936,16 +1100,27 @@ const menuSeedData: MenuSeedCategory[] = [
         name: "KEBAB BOX",
         description: "mięso, warzywa, frytki, sos",
         prices: { CLASSIC: 23, XXL: 29 },
+        modifierGroupsBySize: buildDeltaRollLikeModifierGroupsBySizes({
+          sizes: ["CLASSIC", "XXL"],
+          includeMeat: true,
+        }),
       },
       {
         name: "BOX AMERYKAŃSKI",
         description: "mięso, frytki, sos",
         prices: { CLASSIC: 24, XXL: 30 },
+        modifierGroupsBySize: buildDeltaRollLikeModifierGroupsBySizes({
+          sizes: ["CLASSIC", "XXL"],
+          includeMeat: true,
+        }),
       },
       {
         name: "KIDS BOX",
         description: "chicken nuggets 2 szt, chicken popsy 5 szt, frytki 80g, sos i napój",
         prices: { CLASSIC: 20 },
+        modifierGroups: buildDeltaRollLikeModifierGroups({
+          includeMeat: false,
+        }),
       },
     ],
   },
@@ -956,26 +1131,42 @@ const menuSeedData: MenuSeedCategory[] = [
         name: "KEBAB NA TALERZU",
         description: "mięso, warzywa, frytki, sos",
         prices: { STANDARD: 30 },
+        modifierGroups: buildDeltaRollLikeModifierGroups({
+          includeMeat: true,
+        }),
       },
       {
         name: "MEGA TALERZ",
         description: "2x mięso, warzywa, sos + frytki",
         prices: { STANDARD: 45 },
+        modifierGroups: buildDeltaRollLikeModifierGroups({
+          includeMeat: true,
+          extraPrice: 5,
+        }),
       },
       {
         name: "SUPER TALERZ",
         description: "mięso, warzywa, frytki, ser, sos",
         prices: { STANDARD: 35 },
+        modifierGroups: buildDeltaRollLikeModifierGroups({
+          includeMeat: true,
+        }),
       },
       {
         name: "TALERZ AMERYKAŃSKI",
         description: "mięso, frytki, sos",
         prices: { STANDARD: 36 },
+        modifierGroups: buildDeltaRollLikeModifierGroups({
+          includeMeat: true,
+        }),
       },
       {
         name: "TALERZ WEGE",
         description: "falafele, warzywa, frytki, sos",
         prices: { STANDARD: 23 },
+        modifierGroups: buildDeltaRollLikeModifierGroups({
+          includeMeat: false,
+        }),
       },
     ],
   },
@@ -986,16 +1177,25 @@ const menuSeedData: MenuSeedCategory[] = [
         name: "SAŁATKA KEBAB",
         description: "mięso, warzywa, sos",
         prices: { STANDARD: 24 },
+        modifierGroups: buildDeltaRollLikeModifierGroups({
+          includeMeat: true,
+        }),
       },
       {
         name: "CRISPY SALAD",
         description: "chicken strips, warzywa, sos",
         prices: { STANDARD: 25 },
+        modifierGroups: buildDeltaRollLikeModifierGroups({
+          includeMeat: false,
+        }),
       },
       {
         name: "SAŁATKA GRECKA",
         description: "warzywa, ser sałatkowy, jalapeño, oliwki, sos",
         prices: { STANDARD: 18 },
+        modifierGroups: buildDeltaRollLikeModifierGroups({
+          includeMeat: false,
+        }),
       },
     ],
   },
@@ -1006,6 +1206,9 @@ const menuSeedData: MenuSeedCategory[] = [
         name: "KAPSALON",
         description: "mięso, warzywa, frytki, ser, sos",
         prices: { STANDARD: 30 },
+        modifierGroups: buildDeltaRollLikeModifierGroups({
+          includeMeat: true,
+        }),
       },
     ],
   },
@@ -1182,22 +1385,9 @@ async function ensureBranchMenuItemSizes(branchMenuId: string) {
         where: { branchMenuItemId: branchMenuItem.id },
       });
 
-      for (const sizeRow of sizeRows) {
-        await prisma.branchMenuItemSize.upsert({
-          where: {
-            branchMenuItemId_sizeOptionId: {
-              branchMenuItemId: sizeRow.branchMenuItemId,
-              sizeOptionId: sizeRow.sizeOptionId,
-            },
-          },
-          update: {
-            price: sizeRow.price,
-            available: sizeRow.available,
-          },
-          create: sizeRow,
-        });
-      }
-
+      await prisma.branchMenuItemSize.createMany({
+        data: sizeRows,
+      });
     } catch (error) {
       console.error("[seed-size-debug] upsert failed", branchMenuItem.id, error);
       throw error;
@@ -1223,11 +1413,22 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string) {
         },
       });
 
+  const categoriesByName = new Map(
+    (await prisma.category.findMany({ where: { menuId: branchMenu.id } })).map((category) => [category.name, category])
+  );
+  const sizeGroupsByName = new Map(
+    (await prisma.sizeGroup.findMany()).map((sizeGroup) => [sizeGroup.name, sizeGroup])
+  );
+  const branchMenuItemsByMenuItemId = new Map(
+    (await prisma.branchMenuItem.findMany({ where: { branchMenuId: branchMenu.id } })).map((branchMenuItem) => [
+      branchMenuItem.menuItemId,
+      branchMenuItem,
+    ])
+  );
+
   for (let categoryIndex = 0; categoryIndex < menuSeedData.length; categoryIndex++) {
     const categorySeed = menuSeedData[categoryIndex];
-    let category = await prisma.category.findFirst({
-      where: { menuId: branchMenu.id, name: categorySeed.category },
-    });
+    let category = categoriesByName.get(categorySeed.category);
 
     if (!category) {
       category = await prisma.category.create({
@@ -1239,6 +1440,7 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string) {
           active: true,
         },
       });
+      categoriesByName.set(category.name, category);
     } else {
       await prisma.category.update({
         where: { id: category.id },
@@ -1251,6 +1453,10 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string) {
 
     await upsertCategoryTranslations(category.id, categorySeed.category);
 
+    const menuItemsByName = new Map(
+      (await prisma.menuItem.findMany({ where: { categoryId: category.id } })).map((menuItem) => [menuItem.name, menuItem])
+    );
+
     for (let itemIndex = 0; itemIndex < categorySeed.items.length; itemIndex++) {
       const itemSeed = categorySeed.items[itemIndex];
       const hasSizes = itemSeed.hasSizes ?? Boolean(itemSeed.prices && Object.keys(itemSeed.prices).length > 0);
@@ -1258,7 +1464,7 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string) {
 
       if (hasSizes) {
         const sizeGroupName = `Sizes - ${itemSeed.name}`;
-        sizeGroup = await prisma.sizeGroup.findFirst({ where: { name: sizeGroupName } });
+        sizeGroup = sizeGroupsByName.get(sizeGroupName) ?? null;
         if (!sizeGroup) {
           sizeGroup = await prisma.sizeGroup.create({
             data: {
@@ -1267,12 +1473,11 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string) {
               active: true,
             },
           });
+          sizeGroupsByName.set(sizeGroup.name, sizeGroup);
         }
       }
 
-      let menuItem = await prisma.menuItem.findFirst({
-        where: { categoryId: category.id, name: itemSeed.name },
-      });
+      let menuItem = menuItemsByName.get(itemSeed.name);
 
       const menuItemData = {
         categoryId: category.id,
@@ -1286,6 +1491,7 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string) {
 
       if (!menuItem) {
         menuItem = await prisma.menuItem.create({ data: menuItemData });
+        menuItemsByName.set(menuItem.name, menuItem);
       } else {
         await prisma.menuItem.update({
           where: { id: menuItem.id },
@@ -1297,48 +1503,60 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string) {
 
       if (hasSizes && sizeGroup) {
         const priceEntries = Object.entries(itemSeed.prices ?? {});
+        const sizeOptionUpdates: Array<Promise<unknown>> = [];
+        const sizeOptionCreates: Array<{
+          sizeGroupId: string;
+          name: string;
+          value: string;
+          displayOrder: number;
+          active: boolean;
+        }> = [];
 
         for (let sizeIndex = 0; sizeIndex < priceEntries.length; sizeIndex++) {
           const [sizeName] = priceEntries[sizeIndex];
           const stableSizeValue = getStableSizeValue(sizeName);
           const fallbackSizeName = getSizeOptionFallbackLabel(sizeName);
 
-          const existingSize = await prisma.sizeOption.findFirst({
-            where: {
-              sizeGroupId: sizeGroup.id,
-              value: stableSizeValue,
-            },
-          });
+          const existingSize = (await prisma.sizeOption.findMany({ where: { sizeGroupId: sizeGroup.id } })).find(
+            (sizeOption) => sizeOption.value === stableSizeValue
+          );
 
           if (existingSize) {
-            await prisma.sizeOption.update({
-              where: { id: existingSize.id },
-              data: {
-                name: fallbackSizeName,
-                value: stableSizeValue,
-                displayOrder: sizeIndex,
-                active: true,
-              },
-            });
-            await upsertSizeOptionTranslations(existingSize.id, stableSizeValue);
+            sizeOptionUpdates.push(
+              prisma.sizeOption.update({
+                where: { id: existingSize.id },
+                data: {
+                  name: fallbackSizeName,
+                  value: stableSizeValue,
+                  displayOrder: sizeIndex,
+                  active: true,
+                },
+              })
+            );
+            sizeOptionUpdates.push(
+              upsertSizeOptionTranslations(existingSize.id, stableSizeValue)
+            );
           } else {
-            const createdSizeOption = await prisma.sizeOption.create({
-              data: {
-                sizeGroupId: sizeGroup.id,
-                name: fallbackSizeName,
-                value: stableSizeValue,
-                displayOrder: sizeIndex,
-                active: true,
-              },
+            sizeOptionCreates.push({
+              sizeGroupId: sizeGroup.id,
+              name: fallbackSizeName,
+              value: stableSizeValue,
+              displayOrder: sizeIndex,
+              active: true,
             });
-            await upsertSizeOptionTranslations(createdSizeOption.id, stableSizeValue);
           }
+        }
+
+        if (sizeOptionUpdates.length > 0) {
+          await Promise.all(sizeOptionUpdates);
+        }
+
+        if (sizeOptionCreates.length > 0) {
+          await prisma.sizeOption.createMany({ data: sizeOptionCreates });
         }
       }
 
-      let branchMenuItem = await prisma.branchMenuItem.findFirst({
-        where: { branchMenuId: branchMenu.id, menuItemId: menuItem.id },
-      });
+      let branchMenuItem = branchMenuItemsByMenuItemId.get(menuItem.id);
 
       if (!branchMenuItem) {
         branchMenuItem = await prisma.branchMenuItem.create({
@@ -1351,6 +1569,7 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string) {
             basePrice: itemSeed.basePrice != null ? Number(itemSeed.basePrice) : null,
           },
         });
+        branchMenuItemsByMenuItemId.set(branchMenuItem.menuItemId, branchMenuItem);
       } else {
         await prisma.branchMenuItem.update({
           where: { id: branchMenuItem.id },
@@ -1369,7 +1588,6 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string) {
           orderBy: { displayOrder: "asc" },
         });
 
-  
         if (sizeOptions.length === 0) {
           const fallbackSizeNames = Object.keys(itemSeed.prices ?? {});
           for (let sizeIndex = 0; sizeIndex < fallbackSizeNames.length; sizeIndex++) {
@@ -1398,30 +1616,27 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string) {
           }
         }
 
-        for (const sizeOption of sizeOptions) {
-          const price = Number(itemSeed.prices?.[sizeOption.name] ?? itemSeed.prices?.[sizeOption.value ?? ""] ?? itemSeed.basePrice ?? 0);
-          await prisma.branchMenuItemSize.upsert({
-            where: {
-              branchMenuItemId_sizeOptionId: {
-                branchMenuItemId: branchMenuItem.id,
-                sizeOptionId: sizeOption.id,
-              },
-            },
-            update: {
-              price,
-              available: true,
-            },
-            create: {
+        const branchSizeRows = sizeOptions
+          .map((sizeOption) => {
+            const price = Number(
+              itemSeed.prices?.[sizeOption.name] ?? itemSeed.prices?.[sizeOption.value ?? ""] ?? itemSeed.basePrice ?? 0
+            );
+
+            return {
               branchMenuItemId: branchMenuItem.id,
               sizeOptionId: sizeOption.id,
               price,
               available: true,
-            },
-          });
+            };
+          })
+          .filter((row) => Number.isFinite(row.price));
+
+        if (branchSizeRows.length > 0) {
+          await prisma.branchMenuItemSize.deleteMany({ where: { branchMenuItemId: branchMenuItem.id } });
+          await prisma.branchMenuItemSize.createMany({ data: branchSizeRows });
         }
       }
 
-      const modifierAttachmentTarget = hasSizes ? null : { menuItemId: menuItem.id };
       if (!hasSizes) {
         const existingModifierGroups = await prisma.modifierGroup.findMany({
           where: { menuItemId: menuItem.id },
@@ -1448,20 +1663,21 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string) {
 
           await upsertModifierGroupTranslations(modifierGroup.id, modifierGroupSeed.name);
 
-          for (let optionIndex = 0; optionIndex < modifierGroupSeed.options.length; optionIndex++) {
-            const optionSeed = modifierGroupSeed.options[optionIndex];
-            const modifierOption = await prisma.modifierOption.create({
-              data: {
-                modifierGroupId: modifierGroup.id,
-                name: optionSeed.name,
-                price: Number(optionSeed.price),
-                defaultSelected: Boolean(optionSeed.defaultSelected),
-                displayOrder: optionIndex,
-                active: true,
-              },
-            });
-            await upsertModifierOptionTranslations(modifierOption.id, optionSeed.name);
-          }
+          await Promise.all(
+            modifierGroupSeed.options.map(async (optionSeed, optionIndex) => {
+              const modifierOption = await prisma.modifierOption.create({
+                data: {
+                  modifierGroupId: modifierGroup.id,
+                  name: optionSeed.name,
+                  price: Number(optionSeed.price),
+                  defaultSelected: Boolean(optionSeed.defaultSelected),
+                  displayOrder: optionIndex,
+                  active: true,
+                },
+              });
+              await upsertModifierOptionTranslations(modifierOption.id, optionSeed.name);
+            })
+          );
         }
       } else if (sizeGroup) {
         const sizeOptions = await prisma.sizeOption.findMany({
@@ -1499,20 +1715,21 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string) {
 
             await upsertModifierGroupTranslations(modifierGroup.id, modifierGroupSeed.name);
 
-            for (let optionIndex = 0; optionIndex < modifierGroupSeed.options.length; optionIndex++) {
-              const optionSeed = modifierGroupSeed.options[optionIndex];
-              const modifierOption = await prisma.modifierOption.create({
-                data: {
-                  modifierGroupId: modifierGroup.id,
-                  name: optionSeed.name,
-                  price: Number(optionSeed.price),
-                  defaultSelected: Boolean(optionSeed.defaultSelected),
-                  displayOrder: optionIndex,
-                  active: true,
-                },
-              });
-              await upsertModifierOptionTranslations(modifierOption.id, optionSeed.name);
-            }
+            await Promise.all(
+              modifierGroupSeed.options.map(async (optionSeed, optionIndex) => {
+                const modifierOption = await prisma.modifierOption.create({
+                  data: {
+                    modifierGroupId: modifierGroup.id,
+                    name: optionSeed.name,
+                    price: Number(optionSeed.price),
+                    defaultSelected: Boolean(optionSeed.defaultSelected),
+                    displayOrder: optionIndex,
+                    active: true,
+                  },
+                });
+                await upsertModifierOptionTranslations(modifierOption.id, optionSeed.name);
+              })
+            );
           }
         }
       }
