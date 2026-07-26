@@ -341,13 +341,13 @@ const descriptionTranslations: Record<string, Partial<Record<LanguageCode, strin
 
 const modifierGroupTranslations: Record<string, Partial<Record<LanguageCode, string>>> = {
   'Wybierz mięso': { en: 'Choose Meat', uk: 'Оберіть м’ясо' },
-  'Sosy (maksymalnie można wybrać 3 sosy)': {
-    en: 'Sauces (maximum 3 sauces can be selected)',
-    uk: 'Соуси (можна вибрати до 3 соусів)',
+  'Sosy (maksymalnie można wybrać 2 sosy)': {
+    en: 'Sauces (maximum 2 sauces can be selected)',
+    uk: 'Соуси (можна вибрати до 2 соусів)',
   },
-  'Sauces (maximum 3 sauces can be selected)': {
-    pl: 'Sosy (maksymalnie można wybrać 3 sosy)',
-    uk: 'Соуси (можна вибрати до 3 соусів)',
+  'Sauces (maximum 2 sauces can be selected)': {
+    pl: 'Sosy (maksymalnie można wybrać 2 sosy)',
+    uk: 'Соуси (можна вибрати до 2 соусів)',
   },
   Dodatki: { en: 'Extras', uk: 'Додатки' },
   Temperatura: { en: 'Temperature', uk: 'Температура' },
@@ -446,10 +446,10 @@ const buildDeltaRollLikeModifierGroups = ({
   }
 
   groups.push({
-    name: "Sosy (maksymalnie można wybrać 3 sosy)",
+    name: "Sosy (maksymalnie można wybrać 2 sosy)",
     required: false,
     minSelections: 0,
-    maxSelections: 3,
+    maxSelections: 2,
     options: [
       { name: "Czosnkowy", price: 0 },
       { name: "Łagodny", price: 0, defaultSelected: true },
@@ -770,10 +770,10 @@ const menuSeedData: MenuSeedCategory[] = [
               ],
             },
             {
-              name: "Sosy (maksymalnie można wybrać 3 sosy)",
+              name: "Sosy (maksymalnie można wybrać 2 sosy)",
               required: false,
               minSelections: 0,
-              maxSelections: 3,
+              maxSelections: 2,
               options: [
                 { name: "Czosnkowy", price: 0 },
                 { name: "Łagodny", price: 0, defaultSelected: true },
@@ -809,10 +809,10 @@ const menuSeedData: MenuSeedCategory[] = [
               ],
             },
             {
-              name: "Sosy (maksymalnie można wybrać 3 sosy)",
+              name: "Sosy (maksymalnie można wybrać 2 sosy)",
               required: false,
               minSelections: 0,
-              maxSelections: 3,
+              maxSelections: 2,
               options: [
                 { name: "Czosnkowy", price: 0 },
                 { name: "Łagodny", price: 0, defaultSelected: true },
@@ -848,10 +848,10 @@ const menuSeedData: MenuSeedCategory[] = [
               ],
             },
             {
-              name: "Sosy (maksymalnie można wybrać 3 sosy)",
+              name: "Sosy (maksymalnie można wybrać 2 sosy)",
               required: false,
               minSelections: 0,
-              maxSelections: 3,
+              maxSelections: 2,
               options: [
                 { name: "Czosnkowy", price: 0 },
                 { name: "Łagodny", price: 0, defaultSelected: true },
