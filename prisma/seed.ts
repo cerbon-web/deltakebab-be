@@ -1283,18 +1283,6 @@ const menuSeedData: MenuSeedCategory[] = [
         imageUrl: null,
         basePrice: 6,
         hasSizes: false,
-        modifierGroups: [
-          {
-            name: "Temperatura",
-            required: true,
-            minSelections: 1,
-            maxSelections: 1,
-            options: [
-              { name: "Zimny", price: 0 },
-              { name: "W temperaturze pokojowej", price: 0 },
-            ],
-          },
-        ],
       },
       {
         name: "MANGO DIMES",
@@ -1312,14 +1300,24 @@ const menuSeedData: MenuSeedCategory[] = [
         name: "PIERROT",
         description: "330 ml",
         imageUrl: null,
-        prices: {
-          "Cola-Cola": 7,
-          "Pomarańczowy": 7,
-          "Lemoniada": 7,
-          "Czerwony Owoc": 7,
-          "Zielony Owoc": 7,
-          "Oranżada": 7,
-        },
+        basePrice: 7,
+        hasSizes: false,
+        modifierGroups: [
+          {
+            name: "Smak",
+            required: true,
+            minSelections: 1,
+            maxSelections: 1,
+            options: [
+              { name: "Cola-Cola", price: 0, defaultSelected: true },
+              { name: "Pomarańczowy", price: 0 },
+              { name: "Lemoniada", price: 0 },
+              { name: "Czerwony Owoc", price: 0 },
+              { name: "Zielony Owoc", price: 0 },
+              { name: "Oranżada", price: 0 },
+            ],
+          },
+        ],
       },
       {
         name: "MIRINDA",
