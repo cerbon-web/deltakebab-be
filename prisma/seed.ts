@@ -1508,7 +1508,7 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string) {
         categoryId: category.id,
         name: itemSeed.name,
         description: itemSeed.description ?? null,
-        imageUrl: itemSeed.imageUrl ?? categorySeed.icon ?? null,
+        imageUrl: itemSeed.imageUrl === null ? null : itemSeed.imageUrl ?? categorySeed.icon ?? null,
         displayOrder: itemIndex,
         featured: itemSeed.featured ?? false,
         active: true,
