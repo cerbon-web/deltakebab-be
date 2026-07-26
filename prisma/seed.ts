@@ -35,6 +35,7 @@ type MenuSeedModifierGroup = {
 type MenuSeedItem = {
   name: string;
   description: string;
+  imageUrl?: string | null;
   featured?: boolean;
   basePrice?: number;
   prices?: Record<string, number>;
@@ -45,6 +46,7 @@ type MenuSeedItem = {
 
 type MenuSeedCategory = {
   category: string;
+  icon?: string | null;
   items: MenuSeedItem[];
 };
 
@@ -750,6 +752,7 @@ export const buildBranchMenuItemSizePayloads = ({
 const menuSeedData: MenuSeedCategory[] = [
   {
     category: "ROLLO",
+    icon: "/uploads/rollo.png",
     items: [
       {
         name: "DELTA ROLLO",
@@ -970,6 +973,7 @@ const menuSeedData: MenuSeedCategory[] = [
   },
   {
     category: "TORTILLA",
+    icon: "/uploads/tortilla.png",
     items: [
       {
         name: "TORTILLA DELTA",
@@ -1038,6 +1042,7 @@ const menuSeedData: MenuSeedCategory[] = [
   },
   {
     category: "BUŁKA",
+    icon: "/uploads/bulka.png",
     items: [
       {
         name: "KEBAB W BUŁCE",
@@ -1095,6 +1100,7 @@ const menuSeedData: MenuSeedCategory[] = [
   },
   {
     category: "BOX",
+    icon: "/uploads/box.png",
     items: [
       {
         name: "KEBAB BOX",
@@ -1126,6 +1132,7 @@ const menuSeedData: MenuSeedCategory[] = [
   },
   {
     category: "KEBAB NA TALERZU",
+    icon: "/uploads/talerz.png",
     items: [
       {
         name: "KEBAB NA TALERZU",
@@ -1172,6 +1179,7 @@ const menuSeedData: MenuSeedCategory[] = [
   },
   {
     category: "SAŁATKI",
+    icon: "/uploads/salatki.png",
     items: [
       {
         name: "SAŁATKA KEBAB",
@@ -1201,6 +1209,7 @@ const menuSeedData: MenuSeedCategory[] = [
   },
   {
     category: "KAPSALON",
+    icon: "/uploads/kapsalon.png",
     items: [
       {
         name: "KAPSALON",
@@ -1214,6 +1223,7 @@ const menuSeedData: MenuSeedCategory[] = [
   },
   {
     category: "DODATKI",
+    icon: "/uploads/dodatki.png",
     items: [
       {
         name: "FRYTKI",
@@ -1229,40 +1239,48 @@ const menuSeedData: MenuSeedCategory[] = [
   },
   {
     category: "O KURCZĘ!",
+    icon: "/uploads/kurcze.png",
     items: [
       {
         name: "DELTOPYCHA",
         description: "polędwiczki z kurczaka 2 szt., chicken popsy 8 szt., frytki, sos",
+        imageUrl: null,
         prices: { STANDARD: 28 },
       },
       {
         name: "CHICKEN STRIPS",
         description: "polędwiczki z kurczaka 4 szt., frytki, sos",
+        imageUrl: null,
         prices: { STANDARD: 24 },
       },
       {
         name: "CHICKEN POPSY",
         description: "chrupiące popsy z kurczaka 10 szt., frytki, sos",
+        imageUrl: null,
         prices: { STANDARD: 20 },
       },
       {
         name: "CHICKEN WINGS",
         description: "chrupiacy kurczak 4 szt., frytki, sos",
+        imageUrl: null,
         prices: { STANDARD: 25 },
       },
       {
         name: "CHICKEN NUGGETS",
         description: "nuggetsy z kurczaka 7szt., frytki, sos",
+        imageUrl: null,
         prices: { STANDARD: 22 },
       },
     ],
   },
   {
     category: "NAPOJE",
+    icon: "/uploads/napoje.png",
     items: [
       {
         name: "AYRAN",
         description: "",
+        imageUrl: null,
         basePrice: 6,
         hasSizes: false,
         modifierGroups: [
@@ -1281,16 +1299,19 @@ const menuSeedData: MenuSeedCategory[] = [
       {
         name: "MANGO DIMES",
         description: "0,33L",
+        imageUrl: null,
         prices: { STANDARD: 7 },
       },
       {
         name: "PEPSI",
         description: "",
+        imageUrl: null,
         prices: { SIZE_033: 7, SIZE_05: 9 },
       },
       {
         name: "PIERROT",
         description: "330 ml",
+        imageUrl: null,
         prices: {
           "Cola-Cola": 7,
           "Pomarańczowy": 7,
@@ -1303,21 +1324,25 @@ const menuSeedData: MenuSeedCategory[] = [
       {
         name: "MIRINDA",
         description: "",
+        imageUrl: null,
         prices: { SIZE_033: 7, SIZE_05: 9 },
       },
       {
         name: "LIPTON",
         description: "",
+        imageUrl: null,
         prices: { SIZE_033: 7, SIZE_05: 9 },
       },
       {
         name: "MOUNTAIN DEW",
         description: "",
+        imageUrl: null,
         prices: { SIZE_033: 7, SIZE_05: 9 },
       },
       {
         name: "WODA",
         description: "0,5L",
+        imageUrl: null,
         prices: { STANDARD: 5 },
       },
     ],
@@ -1435,7 +1460,7 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string) {
         data: {
           menuId: branchMenu.id,
           name: categorySeed.category,
-          icon: "restaurant",
+          icon: categorySeed.icon ?? null,
           displayOrder: categoryIndex,
           active: true,
         },
@@ -1483,6 +1508,7 @@ async function ensureBranchMenuSeed(branchId: string, branchName: string) {
         categoryId: category.id,
         name: itemSeed.name,
         description: itemSeed.description ?? null,
+        imageUrl: itemSeed.imageUrl ?? categorySeed.icon ?? null,
         displayOrder: itemIndex,
         featured: itemSeed.featured ?? false,
         active: true,

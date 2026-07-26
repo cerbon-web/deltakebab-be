@@ -23,7 +23,7 @@ const categories = [
 ];
 
 const view = buildMenuCategoryViews(categories);
-assert.equal(view[0].name, 'Top ones');
+assert.equal(view[0].name, 'Bestsellers');
 assert.deepEqual(view[0].items.map((item: { id: string }) => item.id), ['item-1', 'item-3']);
 assert.deepEqual(view.slice(1).map((category: { name: string }) => category.name), ['Drinks', 'Desserts']);
 assert.deepEqual(view[1].items.map((item: { id: string }) => item.id), ['item-4', 'item-1']);

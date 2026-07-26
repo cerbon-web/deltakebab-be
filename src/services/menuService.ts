@@ -1,4 +1,5 @@
 import { prisma } from '../database/prisma';
+import { toPublicImageUrl } from '../utils/imageStorage';
 
 export type MenuCategoryInput = {
   id: string;
@@ -31,14 +32,14 @@ export const buildMenuCategoryViews = (categories: MenuCategoryInput[]) => {
     .map((category) => ({
       id: category.id,
       name: category.name,
-      icon: category.icon,
+      icon: toPublicImageUrl(category.icon),
       displayOrder: category.displayOrder ?? 0,
       items: (category.items || [])
         .map((menuItem) => ({
           id: menuItem.id,
           name: menuItem.name,
           description: menuItem.description,
-          imageUrl: menuItem.imageUrl,
+          imageUrl: toPublicImageUrl(menuItem.imageUrl),
           active: menuItem.active ?? true,
           displayOrder: menuItem.displayOrder ?? 0,
           featured: menuItem.featured ?? false,
@@ -75,7 +76,7 @@ export const buildMenuCategoryViews = (categories: MenuCategoryInput[]) => {
 
   const featuredCategory = uniqueFeaturedItems.length > 0 ? {
     id: 'featured',
-    name: 'Top ones',
+    name: 'Bestsellers',
     icon: null,
     displayOrder: Number.MIN_SAFE_INTEGER,
     isFeatured: true,
@@ -329,7 +330,7 @@ export const getBranchMenu = async (branchId: string, languageCode: string = 'pl
         id: menuItem.id,
         name: branchMenuItem?.translations?.[0]?.nameOverride ?? menuItem.translations?.[0]?.name ?? branchMenuItem?.nameOverride ?? menuItem.name,
         description: translatedDescription,
-        imageUrl: menuItem.imageUrl,
+        imageUrl: toPublicImageUrl(menuItem.imageUrl),
         active: true,
         available: branchMenuItem?.available ?? true,
         displayOrder: menuItem.displayOrder,
