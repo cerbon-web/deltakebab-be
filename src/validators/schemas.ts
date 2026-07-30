@@ -15,6 +15,8 @@ export const loginSchema = z.object({
   message: 'Email or phone is required'
 });
 
+const itemIdSchema = z.union([z.string().min(1), z.number().int().positive()]).transform((value) => String(value));
+
 export const createOrderSchema = z.object({
   branchId: z.string().min(1),
   restaurantId: z.string().min(1).optional(),
@@ -24,7 +26,7 @@ export const createOrderSchema = z.object({
   orderType: z.enum(['DELIVERY', 'SELF_PICKUP']),
   paymentMethod: z.enum(['CASH', 'CARD']),
   items: z.array(z.object({
-    itemId: z.string().min(1),
+    itemId: itemIdSchema,
     itemName: z.string().min(1).optional(),
     name: z.string().min(1).optional(),
     sizeId: z.string().min(1).nullable().optional(),

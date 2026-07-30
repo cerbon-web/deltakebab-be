@@ -7,3 +7,4 @@ coverage/
 /src/generated/prisma
 server.log
 scripts/
+backend-startup.log

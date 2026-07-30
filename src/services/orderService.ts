@@ -7,14 +7,41 @@ const ORDER_STATUSES = ['NEW', 'ACCEPTED', 'PREPARING', 'READY_FOR_PICKUP', 'PIC
 export const createOrder = async (payload: any) => {
   const { branchId, customerId, guestName, guestPhone, orderType, items, notes, street, buildingNumber, apartmentNumber, floor, city, postalCode, latitude, longitude, accessNotes } = payload;
 
+  if (!branchId) {
+    const error: any = new Error('Branch is required');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (!items?.length) {
+    const error: any = new Error('At least one order item is required');
+    error.statusCode = 400;
+    throw error;
+  }
+
   const branch = await prisma.branch.findUnique({
     where: { id: branchId },
     include: { deliveryRules: true }
   });
 
   if (!branch) {
-    throw new Error('Branch not found');
+    const error: any = new Error('Branch not found');
+    error.statusCode = 404;
+    throw error;
   }
+
+  const effectiveCustomerId = customerId || await (async () => {
+    const guestEmail = `guest-${Date.now()}-${Math.random().toString(36).slice(2)}@local.invalid`;
+    const guestUser = await prisma.user.create({
+      data: {
+        name: guestName || guestPhone || 'Guest customer',
+        email: guestEmail,
+        phone: guestPhone,
+        authProvider: 'NATIVE'
+      }
+    });
+    return guestUser.id;
+  })();
 
   const subtotal = items.reduce((sum: number, item: any) => {
     const basePrice = Number(item.unitPrice || 0);
@@ -28,8 +55,12 @@ export const createOrder = async (payload: any) => {
 
   const order = await prisma.order.create({
     data: {
-      customerId,
-      branchId,
+      customer: {
+        connect: { id: effectiveCustomerId }
+      },
+      branch: {
+        connect: { id: branchId }
+      },
       orderType,
       status: 'NEW',
       totalPrice: total,
@@ -77,7 +108,37 @@ export const createOrder = async (payload: any) => {
   emitNotification(`branch:${branchId}`, { event: 'order.created', orderId: order.id });
   logger.info('Order created', { orderId: order.id, branchId });
 
-  return { id: order.id, status: 'NEW', total };
+  return {
+    id: order.id,
+    orderNumber: order.id.toUpperCase().slice(0, 8),
+    status: 'NEW',
+    totalPrice: Number(total),
+    deliveryFee: deliveryFee ? Number(deliveryFee) : null,
+    createdAt: order.createdAt,
+    orderType,
+    customerName: guestName || '',
+    customerPhone: guestPhone,
+    branch: {
+      id: branch.id,
+      name: branch.name,
+      street: branch.street,
+      buildingNumber: branch.buildingNumber,
+      city: branch.city
+    },
+    items: order.items.map((item: any) => ({
+      id: item.id,
+      itemName: item.itemName,
+      sizeName: item.sizeName,
+      quantity: item.quantity,
+      unitPrice: Number(item.unitPrice),
+      notes: item.notes,
+      modifiers: item.modifiers.map((modifier: any) => ({
+        modifierGroupNameSnapshot: modifier.modifierGroupNameSnapshot,
+        modifierOptionNameSnapshot: modifier.modifierOptionNameSnapshot,
+        priceSnapshot: Number(modifier.priceSnapshot)
+      }))
+    }))
+  };
 };
 
 export const getOrderById = async (id: string) => {

@@ -2,8 +2,14 @@ import { Request, Response } from 'express';
 import { createOrder, getOrderById, getOrdersForCustomer, updateOrderStatus, listRestaurantOrders, listDriverOrders } from '../services/orderService';
 
 export const createOrderController = async (req: Request, res: Response) => {
-  const order = await createOrder(req.body);
-  res.status(201).json(order);
+  try {
+    const order = await createOrder(req.body);
+    res.status(201).json(order);
+  } catch (error: any) {
+    const statusCode = error?.statusCode ?? 500;
+    const message = error?.message ?? 'Unable to create order';
+    res.status(statusCode).json({ status: 'error', message, details: error?.details });
+  }
 };
 
 export const getMyOrdersController = async (req: Request, res: Response) => {
