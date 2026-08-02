@@ -1,4 +1,6 @@
 import { Request, Response } from 'express';
+import { ApiError } from '../middleware/errorHandler';
+import { buildErrorResponse } from '../utils/errorResponse';
 import { createOrder, getOrderById, getOrdersForCustomer, updateOrderStatus, listRestaurantOrders, listDriverOrders } from '../services/orderService';
 
 export const createOrderController = async (req: Request, res: Response) => {
@@ -6,9 +8,16 @@ export const createOrderController = async (req: Request, res: Response) => {
     const order = await createOrder(req.body);
     res.status(201).json(order);
   } catch (error: any) {
-    const statusCode = error?.statusCode ?? 500;
+    const statusCode = error instanceof ApiError ? error.status : (error?.statusCode ?? 500);
+    const code = error instanceof ApiError ? error.code : (error?.code ?? 'ORDER_CREATE_FAILED');
     const message = error?.message ?? 'Unable to create order';
-    res.status(statusCode).json({ status: 'error', message, details: error?.details });
+    const errors = error instanceof ApiError ? error.errors : (error?.errors ?? []);
+
+    res.status(statusCode).json(buildErrorResponse({
+      code,
+      message,
+      errors
+    }));
   }
 };
 
