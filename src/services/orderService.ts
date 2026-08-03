@@ -136,8 +136,17 @@ export const createOrder = async (payload: any) => {
     }
   }).catch(() => undefined);
 
+  const itemCount = items.reduce((sum: number, item: any) => sum + Number(item.quantity || 0), 0);
+
   emitOrderUpdate(order.id, { event: 'order.created', orderId: order.id, status: 'NEW', total });
-  emitNotification(`branch:${branchId}`, { event: 'order.created', orderId: order.id });
+  emitNotification(`branch:${branchId}`, {
+    event: 'order.created',
+    orderId: order.id,
+    orderNumber: order.id.toUpperCase().slice(0, 8),
+    customerName: guestName || '',
+    orderType,
+    itemCount
+  });
   logger.info('Order created', { orderId: order.id, branchId });
 
   return {
