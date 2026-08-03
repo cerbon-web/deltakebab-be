@@ -1,7 +1,9 @@
 import { prisma } from '../database/prisma';
 
+const FINAL_ORDER_STATUSES = ['DELIVERED', 'FAILED_DELIVERY', 'CANCELLED'] as string[];
+
 export const getRestaurants = async () => {
-  return prisma.restaurant.findMany({
+  const restaurants = await prisma.restaurant.findMany({
     include: {
       info: true,
       branches: {
@@ -14,6 +16,31 @@ export const getRestaurants = async () => {
       }
     },
     orderBy: { name: 'asc' }
+  });
+
+  const orderCounts = await prisma.order.groupBy({
+    by: ['branchId'],
+    where: {
+      NOT: {
+        status: { in: FINAL_ORDER_STATUSES }
+      }
+    },
+    _count: { _all: true }
+  });
+
+  const orderCountMap = new Map(orderCounts.map((count) => [count.branchId, (count._count as any)?._all ?? 0]));
+
+  return restaurants.map((restaurant) => {
+    const branches = (restaurant.branches || []).map((branch) => ({
+      ...branch,
+      activeOrderCount: orderCountMap.get(branch.id) ?? 0
+    }));
+
+    return {
+      ...restaurant,
+      activeOrderCount: branches.reduce((sum, branch) => sum + (branch.activeOrderCount ?? 0), 0),
+      branches
+    };
   });
 };
 

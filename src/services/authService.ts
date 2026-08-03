@@ -41,7 +41,8 @@ export const registerUser = async ({ name, email, phone, password }: { name: str
       name: user.name, 
       email: user.email, 
       phone: user.phone, 
-      roles: roleNames 
+      roles: roleNames,
+      branchIds: []
     } 
   };
 };
@@ -54,7 +55,7 @@ export const loginUser = async ({ email, phone, password }: { email?: string; ph
         phone ? { phone } : undefined
       ].filter(Boolean) as any
     },
-    include: { roles: { include: { role: true } } }
+    include: { roles: { include: { role: true } }, restaurantStaff: true }
   });
 
   if (!user) {
@@ -72,7 +73,8 @@ export const loginUser = async ({ email, phone, password }: { email?: string; ph
   }
 
   const roleNames = user.roles.map(r => r.role.name);
-  const token = jwt.sign({ id: user.id, roles: roleNames }, config.jwtSecret as jwt.Secret, signOptions);
+  const branchIds = (user.restaurantStaff || []).map(staff => staff.branchId);
+  const token = jwt.sign({ id: user.id, roles: roleNames, branchIds }, config.jwtSecret as jwt.Secret, signOptions);
 
   return { 
     token, 
@@ -81,7 +83,8 @@ export const loginUser = async ({ email, phone, password }: { email?: string; ph
       name: user.name, 
       email: user.email, 
       phone: user.phone, 
-      roles: roleNames 
+      roles: roleNames,
+      branchIds
     } 
   };
 };

@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { config } from '../config';
 
 export interface AuthRequest extends Request {
-  user?: { id: number; role: string };
+  user?: { id: string; roles: string[]; branchIds?: string[] };
 }
 
 export const authenticate = (req: AuthRequest, res: Response, next: NextFunction): void => {
@@ -17,7 +17,7 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
   const token = authHeader.split(' ')[1];
 
   try {
-    const decoded = jwt.verify(token, config.jwtSecret) as { id: number; role: string };
+    const decoded = jwt.verify(token, config.jwtSecret) as { id: string; roles: string[]; branchIds?: string[] };
     req.user = decoded;
     next();
   } catch (error) {
@@ -26,10 +26,21 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
 };
 
 export const requireAdmin = (req: AuthRequest, res: Response, next: NextFunction): void => {
-  if (req.user?.role !== 'ADMIN') {
+  if (!req.user?.roles.includes('ADMIN')) {
     res.status(403).json({ status: 'error', message: 'Admin access required' });
     return;
   }
 
   next();
+};
+
+export const requireRole = (roles: string[]) => {
+  return (req: AuthRequest, res: Response, next: NextFunction): void => {
+    if (!req.user || !req.user.roles.some(role => roles.includes(role))) {
+      res.status(403).json({ status: 'error', message: 'Insufficient permissions' });
+      return;
+    }
+
+    next();
+  };
 };

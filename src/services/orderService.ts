@@ -26,13 +26,14 @@ const serializeOrderItem = (item: any) => ({
 
 const serializeOrder = (order: any) => ({
   ...order,
+  paymentMethod: order.payment?.method ?? order.paymentMethod ?? null,
   totalPrice: toNumber(order.totalPrice),
   deliveryFee: order.deliveryFee == null ? null : toNumber(order.deliveryFee),
   items: (order.items || []).map(serializeOrderItem)
 });
 
 export const createOrder = async (payload: any) => {
-  const { branchId, customerId, guestName, guestPhone, orderType, items, notes, street, buildingNumber, apartmentNumber, floor, city, postalCode, latitude, longitude, accessNotes } = payload;
+  const { branchId, customerId, guestName, guestPhone, orderType, paymentMethod, items, notes, street, buildingNumber, apartmentNumber, floor, city, postalCode, latitude, longitude, accessNotes } = payload;
 
   if (!branchId) {
     throw new ApiError(400, 'BRANCH_REQUIRED', 'Branch is required', [{ field: 'branchId', code: 'BRANCH_REQUIRED' }]);
@@ -64,6 +65,7 @@ export const createOrder = async (payload: any) => {
     return guestUser.id;
   })();
 
+  const normalizedPaymentMethod = String(paymentMethod || 'CASH').toUpperCase();
   const subtotal = items.reduce((sum: number, item: any) => {
     const basePrice = Number(item.unitPrice || 0);
     const modifierTotal = (item.modifiers || []).reduce((modifierSum: number, modifier: any) => {
@@ -122,8 +124,17 @@ export const createOrder = async (payload: any) => {
         }
       }
     },
-    include: { items: { include: { modifiers: true } }, statusHistory: true }
+    include: { items: { include: { modifiers: true } }, statusHistory: true, payment: true }
   });
+
+  await prisma.payment.create({
+    data: {
+      orderId: order.id,
+      method: normalizedPaymentMethod,
+      status: 'PENDING',
+      amount: total
+    }
+  }).catch(() => undefined);
 
   emitOrderUpdate(order.id, { event: 'order.created', orderId: order.id, status: 'NEW', total });
   emitNotification(`branch:${branchId}`, { event: 'order.created', orderId: order.id });
@@ -146,6 +157,7 @@ export const createOrder = async (payload: any) => {
       buildingNumber: branch.buildingNumber,
       city: branch.city
     },
+    paymentMethod: normalizedPaymentMethod,
     items: order.items.map((item: any) => ({
       id: item.id,
       itemName: item.itemName,
@@ -171,7 +183,8 @@ export const getOrderById = async (id: string) => {
       customer: true,
       branch: true,
       driverAssignment: true,
-      chat: true
+      chat: true,
+      payment: true
     }
   });
 
@@ -190,7 +203,7 @@ export const getOrdersForCustomer = async ({ customerId, phone }: { customerId?:
         phone ? { customerPhone: phone } : undefined
       ].filter(Boolean) as any
     },
-    include: { items: { include: { modifiers: true } }, statusHistory: true },
+    include: { items: { include: { modifiers: true } }, statusHistory: true, payment: true },
     orderBy: { createdAt: 'desc' }
   });
 
@@ -215,7 +228,7 @@ export const updateOrderStatus = async (id: string, status: string, changedByUse
         }
       }
     },
-    include: { items: { include: { modifiers: true } }, statusHistory: true }
+    include: { items: { include: { modifiers: true } }, statusHistory: true, payment: true }
   });
 
   emitOrderUpdate(id, { event: 'order.status.changed', orderId: id, status });
@@ -231,7 +244,7 @@ export const listRestaurantOrders = async (branchId: string, filter?: { status?:
       branchId,
       status: filter?.status
     },
-    include: { items: { include: { modifiers: true } }, customer: true, statusHistory: true },
+    include: { items: { include: { modifiers: true } }, customer: true, statusHistory: true, payment: true },
     orderBy: { createdAt: 'desc' }
   });
 
@@ -245,7 +258,7 @@ export const listDriverOrders = async (driverId: string) => {
         driverId
       }
     },
-    include: { items: { include: { modifiers: true } }, customer: true, statusHistory: true, driverAssignment: true },
+    include: { items: { include: { modifiers: true } }, customer: true, statusHistory: true, driverAssignment: true, payment: true },
     orderBy: { createdAt: 'desc' }
   });
 
