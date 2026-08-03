@@ -6,7 +6,7 @@
     "node": "22.22.2"
   },
   "scripts": {
-    "prebuild": "node scripts/write-build-info.mjs",
+    "prebuild": "node build-info.cjs",
     "build": "tsc -p tsconfig.json",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "postinstall": "npx prisma@5.22.0 generate --schema=./prisma/schema.prisma",
