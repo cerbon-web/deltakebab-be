@@ -12,6 +12,10 @@ PM2_NAME=${PM2_NAME:-delta-be}
 PORT=${PORT:-4000}
 HEALTH_URL=${HEALTH_URL:-https://dapi.cerbon.id:${PORT}/api/health}
 
+# Prevent OOM crashes during TypeScript builds in constrained deployment environments.
+# The default V8 heap is often too low on smaller droplets and CI runners.
+export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=2048}"
+
 # PM2 log paths
 PM2_LOG_DIR=${PM2_LOG_DIR:-"${PM2_HOME:-$HOME/.pm2}/logs"}
 OUT_LOG="$PM2_LOG_DIR/${PM2_NAME}-out.log"
