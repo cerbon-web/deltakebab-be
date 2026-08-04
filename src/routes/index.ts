@@ -5,6 +5,7 @@ import menuRoutes from './menu';
 import orderRoutes from './orders';
 import chatRoutes from './chat';
 import adminRoutes from './admin';
+import notificationsRoutes from './notifications';
 import { config } from '../config';
 import { buildInfo } from '../build-info';
 
@@ -30,5 +31,6 @@ router.use('/menu', menuRoutes);
 router.use('/orders', orderRoutes);
 router.use('/chat', chatRoutes);
 router.use('/admin', adminRoutes);
+router.use('/notifications', notificationsRoutes);
 
 export default router;

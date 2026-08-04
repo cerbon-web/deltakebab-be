@@ -697,3 +697,25 @@ model Notification {
   @@index([userId])
   @@index([isRead])
 }
+
+model DevicePushToken {
+  id          String    @id @default(cuid())
+  tokenHash   String    @unique
+  tokenCipher String
+  userId      String?
+  branchId    String?
+  deviceId    String?
+  deviceName  String?
+  platform    String?
+  isActive    Boolean   @default(true)
+  lastSeenAt  DateTime  @default(now())
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([branchId])
+  @@index([deviceId])
+  @@index([isActive])
+  @@index([lastSeenAt])
+}

@@ -1,6 +1,7 @@
 import { prisma } from '../database/prisma';
 import { ApiError } from '../middleware/errorHandler';
 import { emitOrderUpdate, emitNotification } from '../sockets/orderEvents';
+import { notifyBranchDevices } from './firebaseService';
 import { logger } from '../utils/logger';
 
 const ORDER_STATUSES = ['NEW', 'ACCEPTED', 'PREPARING', 'READY_FOR_PICKUP', 'PICKED_UP', 'IN_DELIVERY', 'DELIVERED', 'FAILED_DELIVERY', 'CANCELLED'] as const;
@@ -147,6 +148,23 @@ export const createOrder = async (payload: any) => {
     orderType,
     itemCount
   });
+
+  await notifyBranchDevices({
+    branchId,
+    orderNumber: order.id.toUpperCase().slice(0, 8),
+    branchName: branch.name,
+    body: `${guestName || 'Guest'} • ${orderType} • ${itemCount} ${itemCount === 1 ? 'item' : 'items'}`,
+    data: {
+      orderId: order.id,
+      branchId,
+      orderType,
+      itemCount: String(itemCount),
+      customerName: guestName || 'Guest'
+    }
+  }).catch((error) => {
+    logger.warn('Branch device push failed', { branchId, orderId: order.id, error: error instanceof Error ? error.message : String(error) });
+  });
+
   logger.info('Order created', { orderId: order.id, branchId });
 
   return {
