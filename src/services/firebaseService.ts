@@ -232,13 +232,46 @@ export const notifyBranchDevices = async ({
     }
   });
 
+  const invalidTokens = response.responses
+    .map((entry, index) => ({ index, entry }))
+    .filter(({ entry }) => {
+      const code = entry.error?.code ?? '';
+      const message = entry.error?.message ?? '';
+      return code === 'messaging/invalid-registration-token' ||
+        code === 'messaging/registration-token-not-registered' ||
+        message.toLowerCase().includes('invalid registration token') ||
+        message.toLowerCase().includes('not registered');
+    })
+    .map(({ index }) => tokens[index])
+    .filter(Boolean);
+
+  if (invalidTokens.length) {
+    await Promise.all(invalidTokens.map(async (invalidToken) => {
+      const invalidHash = buildDeviceRegistrationFingerprint(invalidToken);
+      await prisma.devicePushToken.updateMany({
+        where: { tokenHash: invalidHash },
+        data: {
+          isActive: false,
+          revokedAt: new Date(),
+          lastSeenAt: new Date()
+        }
+      });
+    }));
+
+    logger.warn('Removed invalid device push tokens after Firebase delivery failure', {
+      branchId,
+      invalidCount: invalidTokens.length
+    });
+  }
+
   const canonicalIds = Number((response as any)?.canonicalRegistrationTokenCount ?? 0);
 
   logger.info('Branch notification sent to Firebase', {
     branchId,
     successCount: response.successCount,
     failureCount: response.failureCount,
-    canonicalIds
+    canonicalIds,
+    invalidCount: invalidTokens.length
   });
 
   return {
