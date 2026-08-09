@@ -277,15 +277,21 @@ copy_tls_files_for_release() {
     fi
   fi
 
-  if [ -n "$src_ca" ] && [ -f "$src_ca" ]; then
+  if [ -n "$src_ca" ] && sudo_test_file "$src_ca"; then
     if ! run_sudo cp "$src_ca" "$target_dir/chain.pem"; then
       log "Warning: failed to copy CA file $src_ca; continuing without chain.pem"
+      rm -f "$target_dir/chain.pem" >/dev/null 2>&1 || true
     fi
+  else
+    log "No readable CA source file found at $src_ca; skipping chain.pem copy"
   fi
 
   run_sudo chown "$(whoami):$(id -gn)" "$target_dir"/*.pem >/dev/null 2>&1 || true
   chmod 600 "$target_dir/privkey.pem" >/dev/null 2>&1 || true
   chmod 644 "$target_dir/fullchain.pem" >/dev/null 2>&1 || true
+  if [ -f "$target_dir/chain.pem" ]; then
+    chmod 644 "$target_dir/chain.pem" >/dev/null 2>&1 || true
+  fi
   return 0
 }
 
@@ -305,7 +311,12 @@ copy_tls_if_unreadable() {
   if copy_tls_files_for_release "$source_key" "$source_cert" "$source_ca" "$ssl_copy_dir"; then
     SSL_KEY_PATH="$ssl_copy_dir/privkey.pem"
     SSL_CERT_PATH="$ssl_copy_dir/fullchain.pem"
-    SSL_CA_PATH="$ssl_copy_dir/chain.pem"
+    if [ -f "$ssl_copy_dir/chain.pem" ]; then
+      SSL_CA_PATH="$ssl_copy_dir/chain.pem"
+    else
+      unset SSL_CA_PATH
+      log "CA file not available in copied SSL dir; SSL_CA_PATH unset so HTTPS can still start with fullchain.pem"
+    fi
     export SSL_KEY_PATH
     export SSL_CERT_PATH
     export SSL_CA_PATH
