@@ -185,6 +185,23 @@ PY
   log "Local database bootstrap completed with warnings; continuing"
 }
 
+sudo_test_file() {
+  local file_path="$1"
+  if [ -z "$file_path" ]; then
+    return 1
+  fi
+
+  if [ -f "$file_path" ]; then
+    return 0
+  fi
+
+  if run_sudo test -f "$file_path" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  return 1
+}
+
 resolve_existing_tls_paths() {
   local ssl_domain="$1"
   local requested_key="${2:-}"
@@ -193,7 +210,7 @@ resolve_existing_tls_paths() {
   TLS_RESOLVED_KEY=""
   TLS_RESOLVED_CERT=""
 
-  if [ -n "$requested_key" ] && [ -f "$requested_key" ] && [ -n "$requested_cert" ] && [ -f "$requested_cert" ]; then
+  if [ -n "$requested_key" ] && sudo_test_file "$requested_key" && [ -n "$requested_cert" ] && sudo_test_file "$requested_cert"; then
     TLS_RESOLVED_KEY="$requested_key"
     TLS_RESOLVED_CERT="$requested_cert"
     return 0
@@ -201,15 +218,15 @@ resolve_existing_tls_paths() {
 
   local live_key="/etc/letsencrypt/live/$ssl_domain/privkey.pem"
   local live_cert="/etc/letsencrypt/live/$ssl_domain/fullchain.pem"
-  if [ -f "$live_key" ] && [ -f "$live_cert" ]; then
+  if sudo_test_file "$live_key" && sudo_test_file "$live_cert"; then
     TLS_RESOLVED_KEY="$live_key"
     TLS_RESOLVED_CERT="$live_cert"
     return 0
   fi
 
   local archive_key archive_cert
-  archive_key=$(find "/etc/letsencrypt/archive/$ssl_domain" -maxdepth 1 -type f -name 'privkey*.pem' 2>/dev/null | sort | head -n 1 || true)
-  archive_cert=$(find "/etc/letsencrypt/archive/$ssl_domain" -maxdepth 1 -type f -name 'fullchain*.pem' 2>/dev/null | sort | head -n 1 || true)
+  archive_key=$(run_sudo bash -lc 'find "/etc/letsencrypt/archive/'"$ssl_domain"'" -maxdepth 1 -type f -name "privkey*.pem" 2>/dev/null | sort | head -n 1' || true)
+  archive_cert=$(run_sudo bash -lc 'find "/etc/letsencrypt/archive/'"$ssl_domain"'" -maxdepth 1 -type f -name "fullchain*.pem" 2>/dev/null | sort | head -n 1' || true)
   if [ -n "$archive_key" ] && [ -n "$archive_cert" ]; then
     TLS_RESOLVED_KEY="$archive_key"
     TLS_RESOLVED_CERT="$archive_cert"
@@ -254,6 +271,7 @@ copy_tls_if_unreadable() {
     return 0
   fi
 
+  # If the current user cannot read protected files, attempt to copy them via sudo.
   if copy_tls_files_for_release "$source_key" "$source_cert" "$source_ca" "$ssl_copy_dir"; then
     SSL_KEY_PATH="$ssl_copy_dir/privkey.pem"
     SSL_CERT_PATH="$ssl_copy_dir/fullchain.pem"
@@ -265,7 +283,13 @@ copy_tls_if_unreadable() {
     return 0
   fi
 
-  log "Could not copy unreadable TLS files to release-local path"
+  # If sudo copy failed, try direct read on the source key/cert with sudo to confirm the issue.
+  if run_sudo test -r "$source_key" >/dev/null 2>&1 && run_sudo test -r "$source_cert" >/dev/null 2>&1; then
+    log "TLS files are readable by sudo but not by the current user; copy failed unexpectedly"
+  else
+    log "TLS files are not readable even by sudo or are missing: $source_key, $source_cert"
+  fi
+
   return 1
 }
 
