@@ -330,7 +330,7 @@ ensure_tls_prerequisites() {
     ssl_domain="${SSL_DOMAIN:-$ssl_domain}"
     ssl_email="${SSL_EMAIL:-$ssl_email}"
     ssl_key_path="${SSL_KEY_PATH:-$ssl_key_path}"
-    ssl_cert_path="${SSL_CERT_PATH:-$SSL_CERT_PATH:-$ssl_cert_path}"
+    ssl_cert_path="${SSL_CERT_PATH:-$ssl_cert_path}"
     ssl_ca_path="${SSL_CA_PATH:-$ssl_ca_path}"
   fi
 
