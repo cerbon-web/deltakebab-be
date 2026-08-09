@@ -320,6 +320,7 @@ ensure_tls_prerequisites() {
   local ssl_cert_path="${SSL_CERT_PATH:-}"
   local ssl_ca_path="${SSL_CA_PATH:-}"
 
+  log "Entering ensure_tls_prerequisites for $app_dir"
   if [ -f "$app_dir/.env.production" ]; then
     log "Loading TLS settings from $app_dir/.env.production"
     set -a
@@ -329,7 +330,7 @@ ensure_tls_prerequisites() {
     ssl_domain="${SSL_DOMAIN:-$ssl_domain}"
     ssl_email="${SSL_EMAIL:-$ssl_email}"
     ssl_key_path="${SSL_KEY_PATH:-$ssl_key_path}"
-    ssl_cert_path="${SSL_CERT_PATH:-$ssl_cert_path}"
+    ssl_cert_path="${SSL_CERT_PATH:-$SSL_CERT_PATH:-$ssl_cert_path}"
     ssl_ca_path="${SSL_CA_PATH:-$ssl_ca_path}"
   fi
 
@@ -367,6 +368,10 @@ ensure_tls_prerequisites() {
     fi
 
     log "Final TLS env for release: SSL_KEY_PATH=$SSL_KEY_PATH SSL_CERT_PATH=$SSL_CERT_PATH SSL_CA_PATH=$SSL_CA_PATH"
+    log "Release local ssl dir exists: $( [ -d "$app_dir/ssl" ] && echo yes || echo no )"
+    if [ -d "$app_dir/ssl" ]; then
+      log "Release local ssl contents: $(ls -1 "$app_dir/ssl" 2>/dev/null | tr '\n' ',' | sed 's/,$//')"
+    fi
     return 0
   fi
 
