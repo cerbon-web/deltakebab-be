@@ -517,6 +517,11 @@ main() {
     if check_health_for_url "https://127.0.0.1:${test_port}/api/health"; then
       log "Staged release verified DB connection and health endpoint"
       verified=0
+    else
+      log "Health endpoint did not respond yet; inspecting candidate log"
+      if [ -f "$candidate_log" ]; then
+        tail -n 50 "$candidate_log" || true
+      fi
     fi
   fi
 
@@ -526,6 +531,10 @@ main() {
     kill "$candidate_pid" || true
     # give it a moment
     sleep 1
+  fi
+
+  if [ "$verified" -eq 0 ]; then
+    log "Candidate release started successfully"
   fi
 
   if [ "$verified" -ne 0 ]; then
