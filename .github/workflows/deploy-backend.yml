@@ -91,6 +91,7 @@ jobs:
         env:
           PM2_NAME: delta-be
           HEALTH_URL: https://delta-api.cerbon.id:4000/api/health
+          NODE_INSTALL_VERSION: '20'
         run: |
           SSH_PORT="${{ secrets.SSH_PORT }}"
           if [ -z "$SSH_PORT" ]; then SSH_PORT=22; fi

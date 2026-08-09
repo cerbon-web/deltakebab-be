@@ -42,6 +42,79 @@ rotate_backups() {
   done
 }
 
+# Ensure a command is present; attempt to install common tools automatically.
+# This makes deploys to fresh droplets more resilient when required tools are missing.
+ensure_command() {
+  local cmd="$1"
+  local hint="$2"
+  if command -v "$cmd" >/dev/null 2>&1; then
+    return 0
+  fi
+  log "Command '$cmd' not found; attempting automated install"
+
+  # prefer sudo when available, otherwise require root
+  local SUDO=""
+  if command -v sudo >/dev/null 2>&1; then
+    SUDO="sudo"
+  elif [ "$(id -u)" -ne 0 ]; then
+    log "Cannot install $cmd: neither sudo nor root privileges available"
+    return 1
+  fi
+
+  case "$cmd" in
+    node|npm)
+      # Allow overriding desired major via NODE_INSTALL_VERSION env var (default 20)
+      NODE_INSTALL_VERSION="${NODE_INSTALL_VERSION:-20}"
+      if command -v curl >/dev/null 2>&1; then
+        log "Using NodeSource setup script to install Node $NODE_INSTALL_VERSION.x"
+        if ! curl -fsSL "https://deb.nodesource.com/setup_${NODE_INSTALL_VERSION}.x" | $SUDO -E bash -; then
+          log "NodeSource setup failed; falling back to apt packages"
+        fi
+      else
+        log "curl not found; installing curl first"
+        DEBIAN_FRONTEND=noninteractive $SUDO apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive $SUDO apt-get install -y -qq curl
+        if ! curl -fsSL "https://deb.nodesource.com/setup_${NODE_INSTALL_VERSION}.x" | $SUDO -E bash -; then
+          log "NodeSource setup failed after installing curl; falling back to apt packages"
+        fi
+      fi
+      DEBIAN_FRONTEND=noninteractive $SUDO apt-get update -qq
+      DEBIAN_FRONTEND=noninteractive $SUDO apt-get install -y -qq nodejs || {
+        log "Failed to install nodejs from NodeSource/apt"
+        return 1
+      }
+      ;;
+    pm2)
+      # pm2 requires npm; ensure npm/node first
+      ensure_command npm || return 1
+      log "Installing pm2 globally via npm"
+      if ! $SUDO npm install -g pm2 --silent; then
+        log "Global npm install of pm2 failed; trying without sudo"
+        if ! npm install -g pm2 --silent; then
+          log "Failed to install pm2"
+          return 1
+        fi
+      fi
+      ;;
+    curl)
+      DEBIAN_FRONTEND=noninteractive $SUDO apt-get update -qq
+      DEBIAN_FRONTEND=noninteractive $SUDO apt-get install -y -qq curl
+      ;;
+    *)
+      log "No automated installer configured for '$cmd' - $hint"
+      return 1
+      ;;
+  esac
+
+  if command -v "$cmd" >/dev/null 2>&1; then
+    log "Successfully installed '$cmd'"
+    return 0
+  fi
+  log "Automated install attempted but '$cmd' still not available"
+  return 1
+}
+
+
 # Create a backup snapshot of a specific deployment directory
 create_backup_from_dir() {
   local source_dir="$1"
@@ -211,6 +284,17 @@ main() {
   rsync -az --delete "$ARTIFACT_DIR/" "$release_tmp/"
 
   log "Installing dependencies and building in temporary release"
+  # Ensure required tools are available on fresh droplets; fail early if automatic
+  # installation cannot provide them.
+  if ! ensure_command npm "install nodejs/npm (requires sudo)"; then
+    log "npm is required but could not be installed automatically; aborting"
+    exit 1
+  fi
+  if ! ensure_command pm2 "install pm2 globally via npm"; then
+    log "pm2 is required but could not be installed automatically; aborting"
+    exit 1
+  fi
+
   cd "$release_tmp"
   npm ci
   npm run build
