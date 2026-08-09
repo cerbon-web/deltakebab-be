@@ -90,6 +90,7 @@ jobs:
         run: |
           SSH_PORT="${{ secrets.SSH_PORT }}"
           if [ -z "$SSH_PORT" ]; then SSH_PORT=22; fi
+          ssh -p "$SSH_PORT" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" "mkdir -p ~/app ~/backups/delta-be && chmod 755 ~/app ~/backups ~/backups/delta-be"
           rsync -az --delete \
             --exclude '.git' \
             --exclude 'node_modules' \
