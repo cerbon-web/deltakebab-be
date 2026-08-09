@@ -79,6 +79,14 @@ ensure_deployment_paths() {
 
 ensure_deployment_paths
 
+should_skip_remote_build() {
+  local release_dir="$1"
+  if [ "${SKIP_REMOTE_BUILD:-}" = "1" ] || [ "${SKIP_REMOTE_BUILD:-}" = "true" ] || [ "${SKIP_REMOTE_BUILD:-}" = "TRUE" ]; then
+    return 0
+  fi
+  [ -d "$release_dir/dist" ] && [ -d "$release_dir/node_modules" ]
+}
+
 # Rotate backups: keep latest $KEEP_BACKUPS
 rotate_backups() {
   local keep="$KEEP_BACKUPS"
@@ -361,21 +369,25 @@ main() {
   log "Uploading new release to temporary dir"
   rsync -az --delete "$ARTIFACT_DIR/" "$release_tmp/"
 
-  log "Installing dependencies and building in temporary release"
-  # Ensure required tools are available on fresh droplets; fail early if automatic
-  # installation cannot provide them.
-  if ! ensure_command npm "install nodejs/npm (requires sudo)"; then
-    log "npm is required but could not be installed automatically; aborting"
-    exit 1
-  fi
-  if ! ensure_command pm2 "install pm2 globally via npm"; then
-    log "pm2 is required but could not be installed automatically; aborting"
-    exit 1
-  fi
+  if should_skip_remote_build "$release_tmp"; then
+    log "Skipping remote npm ci/build because deployment artifacts already include dist and node_modules"
+  else
+    log "Installing dependencies and building in temporary release"
+    # Ensure required tools are available on fresh droplets; fail early if automatic
+    # installation cannot provide them.
+    if ! ensure_command npm "install nodejs/npm (requires sudo)"; then
+      log "npm is required but could not be installed automatically; aborting"
+      exit 1
+    fi
+    if ! ensure_command pm2 "install pm2 globally via npm"; then
+      log "pm2 is required but could not be installed automatically; aborting"
+      exit 1
+    fi
 
-  cd "$release_tmp"
-  npm ci
-  npm run build
+    cd "$release_tmp"
+    npm ci
+    npm run build
+  fi
 
   # Export environment from the staged .env.production for seed/prisma if present
   if [ -f "$release_tmp/.env.production" ]; then

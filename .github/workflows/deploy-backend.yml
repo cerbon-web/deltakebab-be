@@ -115,8 +115,6 @@ jobs:
 
           rsync -az --delete \
             --exclude '.git' \
-            --exclude 'node_modules' \
-            --exclude 'dist' \
             --exclude '.github' \
             --exclude 'npm-debug.log*' \
             --exclude '*.log' \
@@ -128,6 +126,7 @@ jobs:
           HEALTH_URL: https://delta-api.cerbon.id:4000/api/health
           SUDO_PASSWORD: ${{ secrets.SUDO_PASSWORD }}
           NODE_INSTALL_VERSION: '22'
+          SKIP_REMOTE_BUILD: 'true'
         run: |
           SSH_PORT="${{ secrets.SSH_PORT }}"
           if [ -z "$SSH_PORT" ]; then SSH_PORT=22; fi
