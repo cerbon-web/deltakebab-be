@@ -855,9 +855,9 @@ main() {
   local test_port
   test_port=$((PORT + 1))
   local candidate_log="$release_tmp/candidate.log"
-  log "Starting staged release for verification on port $test_port (logs: $candidate_log)"
+  log "Starting staged release for verification on port $test_port with SKIP_PRISMA_SEED=true (logs: $candidate_log)"
   # start node directly so PM2 isn't disturbed; redirect output to candidate log
-  NODE_ENV=production PORT="$test_port" node "$release_tmp/dist/index.js" > "$candidate_log" 2>&1 &
+  SKIP_PRISMA_SEED=1 NODE_ENV=production PORT="$test_port" node "$release_tmp/dist/index.js" > "$candidate_log" 2>&1 &
   local candidate_pid=$!
 
   # Wait for the staged release to prove the database is reachable before treating it as valid
