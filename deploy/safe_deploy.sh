@@ -219,6 +219,56 @@ resolve_existing_tls_paths() {
   return 1
 }
 
+copy_tls_files_for_release() {
+  local src_key="$1"
+  local src_cert="$2"
+  local src_ca="$3"
+  local target_dir="$4"
+
+  mkdir -p "$target_dir"
+  log "Copying TLS files into release-local path: $target_dir"
+
+  if ! run_sudo cp "$src_key" "$target_dir/privkey.pem" || ! run_sudo cp "$src_cert" "$target_dir/fullchain.pem"; then
+    log "Failed to copy TLS key or cert into local release path"
+    return 1
+  fi
+
+  if [ -n "$src_ca" ] && [ -f "$src_ca" ]; then
+    run_sudo cp "$src_ca" "$target_dir/chain.pem" || true
+  fi
+
+  run_sudo chown "$(whoami):$(id -gn)" "$target_dir"/*.pem >/dev/null 2>&1 || true
+  chmod 600 "$target_dir/privkey.pem" >/dev/null 2>&1 || true
+  chmod 644 "$target_dir/fullchain.pem" >/dev/null 2>&1 || true
+  return 0
+}
+
+copy_tls_if_unreadable() {
+  local source_key="$1"
+  local source_cert="$2"
+  local source_ca="$3"
+  local release_dir="$4"
+  local ssl_copy_dir="$release_dir/ssl"
+
+  if [ -r "$source_key" ] && [ -r "$source_cert" ]; then
+    return 0
+  fi
+
+  if copy_tls_files_for_release "$source_key" "$source_cert" "$source_ca" "$ssl_copy_dir"; then
+    SSL_KEY_PATH="$ssl_copy_dir/privkey.pem"
+    SSL_CERT_PATH="$ssl_copy_dir/fullchain.pem"
+    SSL_CA_PATH="$ssl_copy_dir/chain.pem"
+    export SSL_KEY_PATH
+    export SSL_CERT_PATH
+    export SSL_CA_PATH
+    log "Using copied TLS files in $ssl_copy_dir for release"
+    return 0
+  fi
+
+  log "Could not copy unreadable TLS files to release-local path"
+  return 1
+}
+
 ensure_tls_prerequisites() {
   local app_dir="$1"
   local ssl_domain="${SSL_DOMAIN:-}"
@@ -266,6 +316,13 @@ ensure_tls_prerequisites() {
     export SSL_KEY_PATH="$TLS_RESOLVED_KEY"
     export SSL_CERT_PATH="$TLS_RESOLVED_CERT"
     log "TLS certificate files already exist for $ssl_domain"
+
+    # If the deploy user cannot read /etc/letsencrypt, copy certs into the staged release
+    if ! copy_tls_if_unreadable "$SSL_KEY_PATH" "$SSL_CERT_PATH" "$ssl_ca_path" "$app_dir"; then
+      log "Failed to make TLS files readable inside the release; aborting deployment"
+      return 1
+    fi
+
     return 0
   fi
 
@@ -712,6 +769,13 @@ main() {
     mv "$DEPLOY_DIR" "$DEPLOY_DIR.old"
   fi
   mv "$release_tmp" "$DEPLOY_DIR"
+
+  log "Ensuring TLS prerequisites for promoted release at $DEPLOY_DIR"
+  ensure_tls_prerequisites "$DEPLOY_DIR" || {
+    log "Failed to resolve TLS paths for the promoted release"
+    restore_previous_release "$backup" || true
+    exit 1
+  }
 
   # Restart PM2 with the new release (stop old process first to free the port)
   if pm2 pid "$PM2_NAME" >/dev/null 2>&1; then
