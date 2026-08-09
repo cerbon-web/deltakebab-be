@@ -87,6 +87,102 @@ should_skip_remote_build() {
   [ -d "$release_dir/dist" ] && [ -d "$release_dir/node_modules" ]
 }
 
+ensure_database_prerequisites() {
+  local app_dir="$1"
+  local db_host="${DB_HOST:-}"
+  local db_port="${DB_PORT:-3306}"
+  local db_user="${DB_USER:-}"
+  local db_password="${DB_PASSWORD:-}"
+  local db_name="${DB_NAME:-}"
+  local db_url="${DATABASE_URL:-}"
+
+  if [ -f "$app_dir/.env.production" ]; then
+    log "Loading database settings from $app_dir/.env.production"
+    set -a
+    # shellcheck source=/dev/null
+    . "$app_dir/.env.production"
+    set +a
+    db_host="${DB_HOST:-$db_host}"
+    db_port="${DB_PORT:-$db_port}"
+    db_user="${DB_USER:-$db_user}"
+    db_password="${DB_PASSWORD:-$db_password}"
+    db_name="${DB_NAME:-$db_name}"
+    db_url="${DATABASE_URL:-$db_url}"
+  fi
+
+  if [ -z "$db_user" ] && [ -n "$db_url" ]; then
+    db_user="$(python3 - <<'PY' "$db_url"
+import sys
+from urllib.parse import urlparse
+u = urlparse(sys.argv[1])
+print(u.username or '')
+PY
+)"
+  fi
+
+  if [ -z "$db_name" ] && [ -n "$db_url" ]; then
+    db_name="$(python3 - <<'PY' "$db_url"
+import sys
+from urllib.parse import urlparse
+u = urlparse(sys.argv[1])
+print(u.path.lstrip('/') or '')
+PY
+)"
+  fi
+
+  if [ -z "$db_host" ]; then
+    db_host="127.0.0.1"
+  fi
+
+  case "$db_host" in
+    127.0.0.1|localhost|::1|0.0.0.0)
+      ;;
+    *)
+      log "Database host is remote ($db_host); skipping local database bootstrap"
+      return 0
+      ;;
+  esac
+
+  if [ -z "$db_user" ] || [ -z "$db_name" ]; then
+    log "Database prerequisites skipped: missing DB_USER or DB_NAME"
+    return 0
+  fi
+
+  if ! command -v mysql >/dev/null 2>&1; then
+    log "Installing MariaDB client/server for local database bootstrap"
+    if ! run_sudo apt-get update -qq || ! run_sudo apt-get install -y -qq mariadb-server mariadb-client; then
+      log "Failed to install MariaDB; continuing without local database bootstrap"
+      return 0
+    fi
+  fi
+
+  if command -v systemctl >/dev/null 2>&1; then
+    run_sudo systemctl enable --now mariadb >/dev/null 2>&1 || run_sudo systemctl enable --now mysql >/dev/null 2>&1 || true
+  else
+    run_sudo service mariadb start >/dev/null 2>&1 || run_sudo service mysql start >/dev/null 2>&1 || true
+  fi
+
+  local sql
+  sql="CREATE DATABASE IF NOT EXISTS \`$db_name\`;"
+  sql+="CREATE USER IF NOT EXISTS '$db_user'@'localhost' IDENTIFIED BY '$db_password';"
+  sql+="GRANT ALL PRIVILEGES ON \`$db_name\`.* TO '$db_user'@'localhost';"
+  sql+="CREATE USER IF NOT EXISTS '$db_user'@'%' IDENTIFIED BY '$db_password';"
+  sql+="GRANT ALL PRIVILEGES ON \`$db_name\`.* TO '$db_user'@'%';"
+  sql+="FLUSH PRIVILEGES;"
+
+  if run_sudo mysql -uroot -e "$sql" >/dev/null 2>&1; then
+    log "Prepared local MySQL/MariaDB database '$db_name' for user '$db_user'"
+    return 0
+  fi
+
+  if run_sudo mysql -e "$sql" >/dev/null 2>&1; then
+    log "Prepared local MySQL/MariaDB database '$db_name' for user '$db_user'"
+    return 0
+  fi
+
+  log "Local database bootstrap completed with warnings; continuing"
+}
+
 # Rotate backups: keep latest $KEEP_BACKUPS
 rotate_backups() {
   local keep="$KEEP_BACKUPS"
@@ -403,6 +499,8 @@ main() {
       log "Constructed DATABASE_URL for staged release from DB_* variables"
     fi
   fi
+
+  ensure_database_prerequisites "$release_tmp"
 
   # Run the staged release directly on a test port so it doesn't conflict with the live process
   local test_port
