@@ -10,7 +10,7 @@ ARTIFACT_DIR=${3:-.}
 KEEP_BACKUPS=${4:-5}
 PM2_NAME=${PM2_NAME:-delta-be}
 PORT=${PORT:-4000}
-HEALTH_URL=${HEALTH_URL:-https://dapi.cerbon.id:${PORT}/api/health}
+HEALTH_URL=${HEALTH_URL:-https://delta-api.cerbon.id:${PORT}/api/health}
 
 # Prevent OOM crashes during TypeScript builds in constrained deployment environments.
 # The default V8 heap is often too low on smaller droplets and CI runners.

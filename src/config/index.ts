@@ -47,9 +47,9 @@ const dbFromUrl = parseDatabaseUrl(process.env.DATABASE_URL);
 const nodeEnv = (process.env.NODE_ENV || 'local').toLowerCase();
 const environment = nodeEnv === 'production' ? 'production' : 'local';
 
-const defaultSslKeyPath = '/etc/letsencrypt/live/dapi.cerbon.id/privkey.pem';
-const defaultSslCertPath = '/etc/letsencrypt/live/dapi.cerbon.id/fullchain.pem';
-const defaultSslCaPath = '/etc/letsencrypt/live/dapi.cerbon.id/chain.pem';
+const defaultSslKeyPath = '/etc/letsencrypt/live/delta-api.cerbon.id/privkey.pem';
+const defaultSslCertPath = '/etc/letsencrypt/live/delta-api.cerbon.id/fullchain.pem';
+const defaultSslCaPath = '/etc/letsencrypt/live/delta-api.cerbon.id/chain.pem';
 
 const sslKeyPath = process.env.SSL_KEY_PATH?.trim() || (environment === 'production' ? defaultSslKeyPath : undefined);
 const sslCertPath = process.env.SSL_CERT_PATH?.trim() || (environment === 'production' ? defaultSslCertPath : undefined);
