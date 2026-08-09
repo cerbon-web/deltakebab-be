@@ -14,7 +14,7 @@ jobs:
     name: Deploy backend
     runs-on: ubuntu-latest
     env:
-      NODE_INSTALL_VERSION: '20'
+      NODE_INSTALL_VERSION: '22'
 
     steps:
       - name: Checkout backend
@@ -104,6 +104,7 @@ jobs:
           PM2_NAME: delta-be
           HEALTH_URL: https://delta-api.cerbon.id:4000/api/health
           SUDO_PASSWORD: ${{ secrets.SUDO_PASSWORD }}
+          NODE_INSTALL_VERSION: '22'
         run: |
           SSH_PORT="${{ secrets.SSH_PORT }}"
           if [ -z "$SSH_PORT" ]; then SSH_PORT=22; fi

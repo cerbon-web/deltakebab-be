@@ -21,6 +21,37 @@ export DEBIAN_FRONTEND=noninteractive
 PM2_LOG_DIR=${PM2_LOG_DIR:-"${PM2_HOME:-$HOME/.pm2}/logs"}
 OUT_LOG="$PM2_LOG_DIR/${PM2_NAME}-out.log"
 
+resolve_node_version() {
+  if [ -n "${NODE_INSTALL_VERSION:-}" ]; then
+    return 0
+  fi
+
+  local package_json_path="${ARTIFACT_DIR}/package.json"
+  if [ -f "$package_json_path" ] && command -v python3 >/dev/null 2>&1; then
+    local resolved
+    resolved=$(python3 - "$package_json_path" <<'PY'
+import json, pathlib, sys
+p = pathlib.Path(sys.argv[1])
+if not p.exists():
+    raise SystemExit(0)
+try:
+    data = json.loads(p.read_text())
+except Exception:
+    raise SystemExit(0)
+eng = data.get('engines', {}).get('node')
+if not eng:
+    raise SystemExit(0)
+print(str(eng).split('.')[0])
+PY
+)
+    if [ -n "$resolved" ]; then
+      NODE_INSTALL_VERSION="$resolved"
+    fi
+  fi
+
+  NODE_INSTALL_VERSION="${NODE_INSTALL_VERSION:-22}"
+}
+
 timestamp() { date -u +"%Y%m%dT%H%M%SZ"; }
 log() { echo "[$(timestamp)] $*"; }
 
@@ -85,7 +116,7 @@ ensure_command() {
 
   case "$cmd" in
     node|npm)
-      NODE_INSTALL_VERSION="${NODE_INSTALL_VERSION:-20}"
+      resolve_node_version
       if ! command -v curl >/dev/null 2>&1; then
         log "curl not found; installing curl first"
         if ! run_sudo apt-get update -qq || ! run_sudo apt-get install -y -qq curl; then
