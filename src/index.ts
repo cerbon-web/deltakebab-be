@@ -91,14 +91,23 @@ const runPrismaPrepareAndSeedIfEmpty = () => {
   }
 
   const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  logger.info(`Running Prisma prepare with NODE_OPTIONS=${process.env.NODE_OPTIONS || '<unset>'}`);
   const prepareResult = spawnSync(npmCommand, ['run', 'db:prepare'], {
     cwd: path.resolve(__dirname, '..'),
     stdio: 'inherit',
     env: process.env,
   });
 
+  if (prepareResult.error) {
+    logger.warn('Prisma prepare step failed to start; skipping seed and continuing startup', prepareResult.error);
+    return;
+  }
+  if (prepareResult.signal) {
+    logger.warn(`Prisma prepare step was terminated by signal ${prepareResult.signal}; skipping seed and continuing startup`);
+    return;
+  }
   if (prepareResult.status !== 0) {
-    logger.warn('Prisma prepare step failed; skipping seed and continuing startup');
+    logger.warn(`Prisma prepare step exited with code ${prepareResult.status}; skipping seed and continuing startup`);
     return;
   }
 

@@ -563,6 +563,55 @@ ensure_command() {
   return 1
 }
 
+ensure_swap_space() {
+  local desired_swap_mb=${SWAP_SIZE_MB:-2048}
+  local swap_file=${SWAP_FILE:-/swapfile}
+  local current_swap
+  current_swap=$(free -m | awk '/^Swap:/ {print $2}')
+
+  log "Memory status: $(free -m | awk 'NR<=2 {print $0}' | tr '\n' ' | ')"
+  log "Swap available: ${current_swap:-0} MiB, desired: ${desired_swap_mb} MiB"
+
+  if [ -n "$current_swap" ] && [ "$current_swap" -ge "$desired_swap_mb" ]; then
+    log "Existing swap is sufficient"
+    return 0
+  fi
+
+  if [ "$(id -u)" -ne 0 ] && ! command -v sudo >/dev/null 2>&1; then
+    log "Cannot create swap: not root and sudo is unavailable"
+    return 0
+  fi
+
+  local avail_mb
+  avail_mb=$(df --output=avail -m / | tail -n1 | tr -d ' ')
+  if [ -z "$avail_mb" ] || [ "$avail_mb" -lt "$desired_swap_mb" ]; then
+    log "Insufficient disk space for swap creation: available ${avail_mb:-0} MiB, needed ${desired_swap_mb} MiB"
+    return 0
+  fi
+
+  if [ -f "$swap_file" ]; then
+    log "Existing swap file detected at $swap_file"
+  else
+    log "Creating swap file $swap_file (${desired_swap_mb} MiB)"
+    if command -v fallocate >/dev/null 2>&1; then
+      run_sudo fallocate -l "${desired_swap_mb}M" "$swap_file" || run_sudo dd if=/dev/zero of="$swap_file" bs=1M count="$desired_swap_mb" status=none
+    else
+      run_sudo dd if=/dev/zero of="$swap_file" bs=1M count="$desired_swap_mb" status=none
+    fi
+    run_sudo chmod 600 "$swap_file"
+    run_sudo mkswap "$swap_file"
+  fi
+
+  if ! run_sudo swapon "$swap_file" >/dev/null 2>&1; then
+    log "Failed to activate swapfile $swap_file"
+    return 0
+  fi
+
+  current_swap=$(free -m | awk '/^Swap:/ {print $2}')
+  log "Swap activated: ${current_swap:-0} MiB available"
+  return 0
+}
+
 
 # Create a backup snapshot of a specific deployment directory
 create_backup_from_dir() {
@@ -768,6 +817,8 @@ main() {
     log "pm2 is required but could not be installed automatically; aborting"
     exit 1
   fi
+
+  ensure_swap_space || log "Swap creation step exited with warnings; continuing deployment"
 
   if should_skip_remote_build "$release_tmp"; then
     log "Skipping remote npm ci/build because deployment artifacts already include dist and node_modules"
