@@ -16,6 +16,10 @@ const app = express();
 let server: http.Server | https.Server;
 
 logger.info(`Starting backend in environment=${config.environment}; useHttps=${config.useHttps}`);
+logger.info(`SSL paths: key=${config.sslKeyPath} cert=${config.sslCertPath} ca=${config.sslCaPath} filesExist=${config.sslFilesExist}`);
+if (config.useHttps && !config.sslFilesExist) {
+  logger.warn('Production HTTPS is enabled but SSL files are missing or unreadable. Startup will still attempt HTTPS and fail if files cannot be loaded.');
+}
 
 if (config.useHttps) {
   try {

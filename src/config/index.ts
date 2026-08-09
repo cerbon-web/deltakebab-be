@@ -69,7 +69,8 @@ export const config = {
   sslKeyPath,
   sslCertPath,
   sslCaPath,
-  useHttps: environment === 'production' && Boolean(sslKeyPath && sslCertPath && sslFilesExist),
+  sslFilesExist,
+  useHttps: environment === 'production' && Boolean(sslKeyPath && sslCertPath),
   db: dbFromUrl || {
     host: process.env.DB_HOST || '127.0.0.1',
     port: Number(process.env.DB_PORT || 3306),
