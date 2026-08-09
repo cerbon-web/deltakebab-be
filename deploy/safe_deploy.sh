@@ -58,7 +58,7 @@ run_sudo() {
       printf '%s\n' "$SUDO_PASSWORD" | sudo -S "$@"
       return $?
     fi
-    # no sudo or password available
+    log "sudo is installed but no passwordless sudo and no SUDO_PASSWORD were provided"
     return 2
   fi
   # if no sudo, ensure we are root
@@ -66,6 +66,7 @@ run_sudo() {
     "$@"
     return $?
   fi
+  log "sudo is required but not installed and the current user is not root"
   return 2
 }
 
