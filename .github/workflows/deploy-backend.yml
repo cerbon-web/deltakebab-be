@@ -90,7 +90,29 @@ jobs:
         run: |
           SSH_PORT="${{ secrets.SSH_PORT }}"
           if [ -z "$SSH_PORT" ]; then SSH_PORT=22; fi
-          ssh -p "$SSH_PORT" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" "mkdir -p ~/app ~/backups/delta-be && chmod 755 ~/app ~/backups ~/backups/delta-be"
+          SSH_USER="${{ secrets.SSH_USER }}"
+          SSH_HOST="${{ secrets.SSH_HOST }}"
+          SUDO_PASSWORD="${{ secrets.SUDO_PASSWORD }}"
+
+          cat > /tmp/fix-deploy-dirs.sh <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          user="$1"
+          sudo_password="${2:-}"
+          home_dir="/home/$user"
+          if [ -n "$sudo_password" ]; then
+            printf '%s\n' "$sudo_password" | sudo -S mkdir -p "$home_dir/app" "$home_dir/backups/delta-be"
+            printf '%s\n' "$sudo_password" | sudo -S chown -R "$user:$user" "$home_dir"
+            printf '%s\n' "$sudo_password" | sudo -S chmod 755 "$home_dir" "$home_dir/app" "$home_dir/backups" "$home_dir/backups/delta-be"
+          else
+            sudo mkdir -p "$home_dir/app" "$home_dir/backups/delta-be"
+            sudo chown -R "$user:$user" "$home_dir"
+            sudo chmod 755 "$home_dir" "$home_dir/app" "$home_dir/backups" "$home_dir/backups/delta-be"
+          fi
+          SH
+          chmod +x /tmp/fix-deploy-dirs.sh
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "bash -s -- '$SSH_USER' '$SUDO_PASSWORD'" < /tmp/fix-deploy-dirs.sh
+
           rsync -az --delete \
             --exclude '.git' \
             --exclude 'node_modules' \
@@ -98,7 +120,7 @@ jobs:
             --exclude '.github' \
             --exclude 'npm-debug.log*' \
             --exclude '*.log' \
-            ./ "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/app/" -e "ssh -p $SSH_PORT"
+            ./ "$SSH_USER@$SSH_HOST:~/app/" -e "ssh -p $SSH_PORT"
 
       - name: Install dependencies, build, verify and restart PM2 (safe deploy)
         env:
