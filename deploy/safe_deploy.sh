@@ -231,6 +231,15 @@ ensure_tls_prerequisites() {
     return 0
   fi
 
+  local fallback_key="/etc/letsencrypt/live/$ssl_domain/privkey.pem"
+  local fallback_cert="/etc/letsencrypt/live/$ssl_domain/fullchain.pem"
+  if [ -f "$fallback_key" ] && [ -f "$fallback_cert" ]; then
+    export SSL_KEY_PATH="$fallback_key"
+    export SSL_CERT_PATH="$fallback_cert"
+    log "TLS certificate files were found at the Certbot default paths for $ssl_domain"
+    return 0
+  fi
+
   if ! ensure_command certbot "install certbot for Let's Encrypt"; then
     log "certbot is required for TLS but could not be installed automatically; aborting"
     return 1
@@ -242,12 +251,18 @@ ensure_tls_prerequisites() {
     return 1
   fi
 
-  if [ ! -f "$ssl_key_path" ] || [ ! -f "$ssl_cert_path" ]; then
-    log "Let's Encrypt certificate issuance completed but expected files were not created"
-    return 1
+  if [ -f "$fallback_key" ] && [ -f "$fallback_cert" ]; then
+    export SSL_KEY_PATH="$fallback_key"
+    export SSL_CERT_PATH="$fallback_cert"
+    log "TLS certificate provisioned successfully for $ssl_domain"
+    return 0
   fi
 
-  log "TLS certificate provisioned successfully for $ssl_domain"
+  log "Let's Encrypt certificate issuance completed but expected files were not created"
+  if [ -d "/etc/letsencrypt/live/$ssl_domain" ]; then
+    ls -la "/etc/letsencrypt/live/$ssl_domain" 2>/dev/null || true
+  fi
+  return 1
 }
 
 # Rotate backups: keep latest $KEEP_BACKUPS
