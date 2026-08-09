@@ -100,16 +100,31 @@ ensure_database_prerequisites() {
 
   if [ -f "$app_dir/.env.production" ]; then
     log "Loading database settings from $app_dir/.env.production"
+    local saved_ssl_key="$SSL_KEY_PATH"
+    local saved_ssl_cert="$SSL_CERT_PATH"
+    local saved_ssl_ca="$SSL_CA_PATH"
+
     set -a
     # shellcheck source=/dev/null
     . "$app_dir/.env.production"
     set +a
+
     db_host="${DB_HOST:-$db_host}"
     db_port="${DB_PORT:-$db_port}"
     db_user="${DB_USER:-$db_user}"
     db_password="${DB_PASSWORD:-$db_password}"
     db_name="${DB_NAME:-$db_name}"
     db_url="${DATABASE_URL:-$db_url}"
+
+    if [ -n "$saved_ssl_key" ]; then
+      export SSL_KEY_PATH="$saved_ssl_key"
+    fi
+    if [ -n "$saved_ssl_cert" ]; then
+      export SSL_CERT_PATH="$saved_ssl_cert"
+    fi
+    if [ -n "$saved_ssl_ca" ]; then
+      export SSL_CA_PATH="$saved_ssl_ca"
+    fi
   fi
 
   if [ -z "$db_user" ] && [ -n "$db_url" ]; then
