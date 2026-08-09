@@ -11,6 +11,8 @@ KEEP_BACKUPS=${4:-5}
 PM2_NAME=${PM2_NAME:-delta-be}
 PORT=${PORT:-4000}
 HEALTH_URL=${HEALTH_URL:-https://127.0.0.1:${PORT}/api/health}
+TLS_RESOLVED_KEY=""
+TLS_RESOLVED_CERT=""
 
 # Prevent OOM crashes during TypeScript builds in constrained deployment environments.
 # The default V8 heap is often too low on smaller droplets and CI runners.
@@ -183,6 +185,40 @@ PY
   log "Local database bootstrap completed with warnings; continuing"
 }
 
+resolve_existing_tls_paths() {
+  local ssl_domain="$1"
+  local requested_key="${2:-}"
+  local requested_cert="${3:-}"
+
+  TLS_RESOLVED_KEY=""
+  TLS_RESOLVED_CERT=""
+
+  if [ -n "$requested_key" ] && [ -f "$requested_key" ] && [ -n "$requested_cert" ] && [ -f "$requested_cert" ]; then
+    TLS_RESOLVED_KEY="$requested_key"
+    TLS_RESOLVED_CERT="$requested_cert"
+    return 0
+  fi
+
+  local live_key="/etc/letsencrypt/live/$ssl_domain/privkey.pem"
+  local live_cert="/etc/letsencrypt/live/$ssl_domain/fullchain.pem"
+  if [ -f "$live_key" ] && [ -f "$live_cert" ]; then
+    TLS_RESOLVED_KEY="$live_key"
+    TLS_RESOLVED_CERT="$live_cert"
+    return 0
+  fi
+
+  local archive_key archive_cert
+  archive_key=$(find "/etc/letsencrypt/archive/$ssl_domain" -maxdepth 1 -type f -name 'privkey*.pem' 2>/dev/null | sort | head -n 1 || true)
+  archive_cert=$(find "/etc/letsencrypt/archive/$ssl_domain" -maxdepth 1 -type f -name 'fullchain*.pem' 2>/dev/null | sort | head -n 1 || true)
+  if [ -n "$archive_key" ] && [ -n "$archive_cert" ]; then
+    TLS_RESOLVED_KEY="$archive_key"
+    TLS_RESOLVED_CERT="$archive_cert"
+    return 0
+  fi
+
+  return 1
+}
+
 ensure_tls_prerequisites() {
   local app_dir="$1"
   local ssl_domain="${SSL_DOMAIN:-}"
@@ -226,17 +262,10 @@ ensure_tls_prerequisites() {
   export SSL_CERT_PATH="$ssl_cert_path"
   export SSL_CA_PATH="$ssl_ca_path"
 
-  if [ -f "$ssl_key_path" ] && [ -f "$ssl_cert_path" ]; then
+  if resolve_existing_tls_paths "$ssl_domain" "$ssl_key_path" "$ssl_cert_path"; then
+    export SSL_KEY_PATH="$TLS_RESOLVED_KEY"
+    export SSL_CERT_PATH="$TLS_RESOLVED_CERT"
     log "TLS certificate files already exist for $ssl_domain"
-    return 0
-  fi
-
-  local fallback_key="/etc/letsencrypt/live/$ssl_domain/privkey.pem"
-  local fallback_cert="/etc/letsencrypt/live/$ssl_domain/fullchain.pem"
-  if [ -f "$fallback_key" ] && [ -f "$fallback_cert" ]; then
-    export SSL_KEY_PATH="$fallback_key"
-    export SSL_CERT_PATH="$fallback_cert"
-    log "TLS certificate files were found at the Certbot default paths for $ssl_domain"
     return 0
   fi
 
@@ -247,13 +276,19 @@ ensure_tls_prerequisites() {
 
   log "Requesting Let's Encrypt certificate for $ssl_domain"
   if ! run_sudo certbot certonly --non-interactive --agree-tos --standalone --preferred-challenges http --email "$ssl_email" -d "$ssl_domain"; then
+    if resolve_existing_tls_paths "$ssl_domain" "$ssl_key_path" "$ssl_cert_path"; then
+      export SSL_KEY_PATH="$TLS_RESOLVED_KEY"
+      export SSL_CERT_PATH="$TLS_RESOLVED_CERT"
+      log "Certbot did not need to issue a new certificate; existing TLS files are available for $ssl_domain"
+      return 0
+    fi
     log "Failed to obtain Let's Encrypt certificate for $ssl_domain"
     return 1
   fi
 
-  if [ -f "$fallback_key" ] && [ -f "$fallback_cert" ]; then
-    export SSL_KEY_PATH="$fallback_key"
-    export SSL_CERT_PATH="$fallback_cert"
+  if resolve_existing_tls_paths "$ssl_domain" "$ssl_key_path" "$ssl_cert_path"; then
+    export SSL_KEY_PATH="$TLS_RESOLVED_KEY"
+    export SSL_CERT_PATH="$TLS_RESOLVED_CERT"
     log "TLS certificate provisioned successfully for $ssl_domain"
     return 0
   fi
