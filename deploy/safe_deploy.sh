@@ -244,14 +244,28 @@ copy_tls_files_for_release() {
 
   mkdir -p "$target_dir"
   log "Copying TLS files into release-local path: $target_dir"
+  log "Source TLS files: key=$src_key cert=$src_cert ca=$src_ca"
 
-  if ! run_sudo cp "$src_key" "$target_dir/privkey.pem" || ! run_sudo cp "$src_cert" "$target_dir/fullchain.pem"; then
-    log "Failed to copy TLS key or cert into local release path"
-    return 1
+  if ! run_sudo cp "$src_key" "$target_dir/privkey.pem"; then
+    log "Primary sudo cp failed for key $src_key"
+    if ! run_sudo bash -lc "cat \"$src_key\" > \"$target_dir/privkey.pem\""; then
+      log "Fallback sudo cat failed for key $src_key"
+      return 1
+    fi
+  fi
+
+  if ! run_sudo cp "$src_cert" "$target_dir/fullchain.pem"; then
+    log "Primary sudo cp failed for cert $src_cert"
+    if ! run_sudo bash -lc "cat \"$src_cert\" > \"$target_dir/fullchain.pem\""; then
+      log "Fallback sudo cat failed for cert $src_cert"
+      return 1
+    fi
   fi
 
   if [ -n "$src_ca" ] && [ -f "$src_ca" ]; then
-    run_sudo cp "$src_ca" "$target_dir/chain.pem" || true
+    if ! run_sudo cp "$src_ca" "$target_dir/chain.pem"; then
+      log "Warning: failed to copy CA file $src_ca; continuing without chain.pem"
+    fi
   fi
 
   run_sudo chown "$(whoami):$(id -gn)" "$target_dir"/*.pem >/dev/null 2>&1 || true
@@ -268,10 +282,11 @@ copy_tls_if_unreadable() {
   local ssl_copy_dir="$release_dir/ssl"
 
   if [ -r "$source_key" ] && [ -r "$source_cert" ]; then
+    log "TLS files are already readable by the current user"
     return 0
   fi
 
-  # If the current user cannot read protected files, attempt to copy them via sudo.
+  log "TLS files are not readable by the current user: key=$source_key cert=$source_cert"
   if copy_tls_files_for_release "$source_key" "$source_cert" "$source_ca" "$ssl_copy_dir"; then
     SSL_KEY_PATH="$ssl_copy_dir/privkey.pem"
     SSL_CERT_PATH="$ssl_copy_dir/fullchain.pem"
@@ -280,12 +295,16 @@ copy_tls_if_unreadable() {
     export SSL_CERT_PATH
     export SSL_CA_PATH
     log "Using copied TLS files in $ssl_copy_dir for release"
-    return 0
+    if [ -r "$SSL_KEY_PATH" ] && [ -r "$SSL_CERT_PATH" ]; then
+      log "Copied TLS files are readable: key=$SSL_KEY_PATH cert=$SSL_CERT_PATH"
+      return 0
+    fi
+    log "Copied TLS files are present but still not readable: key=$SSL_KEY_PATH cert=$SSL_CERT_PATH"
+    return 1
   fi
 
-  # If sudo copy failed, try direct read on the source key/cert with sudo to confirm the issue.
   if run_sudo test -r "$source_key" >/dev/null 2>&1 && run_sudo test -r "$source_cert" >/dev/null 2>&1; then
-    log "TLS files are readable by sudo but not by the current user; copy failed unexpectedly"
+    log "TLS files are readable by sudo but copy failed unexpectedly"
   else
     log "TLS files are not readable even by sudo or are missing: $source_key, $source_cert"
   fi
