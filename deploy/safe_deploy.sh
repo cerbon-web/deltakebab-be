@@ -339,7 +339,7 @@ ensure_tls_prerequisites() {
   if resolve_existing_tls_paths "$ssl_domain" "$ssl_key_path" "$ssl_cert_path"; then
     export SSL_KEY_PATH="$TLS_RESOLVED_KEY"
     export SSL_CERT_PATH="$TLS_RESOLVED_CERT"
-    log "TLS certificate files already exist for $ssl_domain"
+    log "TLS certificate files already exist for $ssl_domain; initial resolved paths: key=$SSL_KEY_PATH cert=$SSL_CERT_PATH"
 
     # If the deploy user cannot read /etc/letsencrypt, copy certs into the staged release
     if ! copy_tls_if_unreadable "$SSL_KEY_PATH" "$SSL_CERT_PATH" "$ssl_ca_path" "$app_dir"; then
@@ -347,6 +347,7 @@ ensure_tls_prerequisites() {
       return 1
     fi
 
+    log "Final TLS env for release: SSL_KEY_PATH=$SSL_KEY_PATH SSL_CERT_PATH=$SSL_CERT_PATH SSL_CA_PATH=$SSL_CA_PATH"
     return 0
   fi
 
@@ -743,6 +744,10 @@ main() {
   fi
 
   ensure_tls_prerequisites "$release_tmp"
+  log "Staged release TLS env: SSL_KEY_PATH=$SSL_KEY_PATH SSL_CERT_PATH=$SSL_CERT_PATH SSL_CA_PATH=$SSL_CA_PATH"
+  if [ -f "$release_tmp/ssl/privkey.pem" ]; then
+    log "Staged release local copied TLS files are present: $release_tmp/ssl"
+  fi
   ensure_database_prerequisites "$release_tmp"
 
   # Run the staged release directly on a test port so it doesn't conflict with the live process
@@ -800,6 +805,10 @@ main() {
     restore_previous_release "$backup" || true
     exit 1
   }
+  log "Promoted release TLS env: SSL_KEY_PATH=$SSL_KEY_PATH SSL_CERT_PATH=$SSL_CERT_PATH SSL_CA_PATH=$SSL_CA_PATH"
+  if [ -f "$DEPLOY_DIR/ssl/privkey.pem" ]; then
+    log "Promoted release local copied TLS files are present: $DEPLOY_DIR/ssl"
+  fi
 
   # Restart PM2 with the new release (stop old process first to free the port)
   if pm2 pid "$PM2_NAME" >/dev/null 2>&1; then
