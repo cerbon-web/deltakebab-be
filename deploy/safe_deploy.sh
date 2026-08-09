@@ -275,22 +275,25 @@ ensure_tls_prerequisites() {
   fi
 
   log "Requesting Let's Encrypt certificate for $ssl_domain"
+  local certbot_status=0
   if ! run_sudo certbot certonly --non-interactive --agree-tos --standalone --preferred-challenges http --email "$ssl_email" -d "$ssl_domain"; then
-    if resolve_existing_tls_paths "$ssl_domain" "$ssl_key_path" "$ssl_cert_path"; then
-      export SSL_KEY_PATH="$TLS_RESOLVED_KEY"
-      export SSL_CERT_PATH="$TLS_RESOLVED_CERT"
-      log "Certbot did not need to issue a new certificate; existing TLS files are available for $ssl_domain"
-      return 0
-    fi
-    log "Failed to obtain Let's Encrypt certificate for $ssl_domain"
-    return 1
+    certbot_status=$?
   fi
 
   if resolve_existing_tls_paths "$ssl_domain" "$ssl_key_path" "$ssl_cert_path"; then
     export SSL_KEY_PATH="$TLS_RESOLVED_KEY"
     export SSL_CERT_PATH="$TLS_RESOLVED_CERT"
-    log "TLS certificate provisioned successfully for $ssl_domain"
+    if [ "$certbot_status" -eq 0 ]; then
+      log "TLS certificate provisioned successfully for $ssl_domain"
+    else
+      log "Certbot did not need to issue a new certificate; existing TLS files are available for $ssl_domain"
+    fi
     return 0
+  fi
+
+  if [ "$certbot_status" -ne 0 ]; then
+    log "Failed to obtain Let's Encrypt certificate for $ssl_domain"
+    return 1
   fi
 
   log "Let's Encrypt certificate issuance completed but expected files were not created"
