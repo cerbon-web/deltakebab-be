@@ -10,7 +10,7 @@ ARTIFACT_DIR=${3:-.}
 KEEP_BACKUPS=${4:-5}
 PM2_NAME=${PM2_NAME:-delta-be}
 PORT=${PORT:-4000}
-HEALTH_URL=${HEALTH_URL:-https://delta-api.cerbon.id:${PORT}/api/health}
+HEALTH_URL=${HEALTH_URL:-http://127.0.0.1:${PORT}/api/health}
 
 # Prevent OOM crashes during TypeScript builds in constrained deployment environments.
 # The default V8 heap is often too low on smaller droplets and CI runners.
@@ -436,16 +436,27 @@ check_health_for_url() {
   local url="$1"
   local retries=30
   local delay=2
-  local curl_args=(curl -sS --fail --max-time 5)
+  local urls=("$url")
+
   if [[ "$url" == https://* ]]; then
-    curl_args+=(--insecure)
+    urls+=("${url/https:/http:}")
   fi
+
   log "Checking health endpoint $url"
   for i in $(seq 1 $retries); do
-    if "${curl_args[@]}" "$url" | grep -q '"status".*"ok"'; then
-      log "Health endpoint reports OK"
-      return 0
-    fi
+    local ok=0
+    for candidate in "${urls[@]}"; do
+      local curl_args=(curl -sS --fail --max-time 5)
+      if [[ "$candidate" == https://* ]]; then
+        curl_args+=(--insecure)
+      fi
+
+      if "${curl_args[@]}" "$candidate" | grep -q '"status".*"ok"'; then
+        log "Health endpoint reports OK at $candidate"
+        return 0
+      fi
+    done
+
     log "Health check failed ($i/$retries), retrying in $delay seconds"
     sleep "$delay"
   done
@@ -513,7 +524,7 @@ main() {
   # Wait for the staged release to prove the database is reachable before treating it as valid
   local verified=1
   if wait_for_database_verification "$release_tmp"; then
-    if check_health_for_url "https://127.0.0.1:${test_port}/api/health"; then
+    if check_health_for_url "http://127.0.0.1:${test_port}/api/health"; then
       log "Staged release verified DB connection and health endpoint"
       verified=0
     else

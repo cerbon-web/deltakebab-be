@@ -123,7 +123,7 @@ jobs:
       - name: Install dependencies, build, verify and restart PM2 (safe deploy)
         env:
           PM2_NAME: delta-be
-          HEALTH_URL: https://delta-api.cerbon.id:4000/api/health
+          HEALTH_URL: http://127.0.0.1:4000/api/health
           SUDO_PASSWORD: ${{ secrets.SUDO_PASSWORD }}
           NODE_INSTALL_VERSION: '22'
           SKIP_REMOTE_BUILD: 'true'
@@ -133,6 +133,7 @@ jobs:
           ssh -p "$SSH_PORT" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" <<EOF
             set -e
             export SUDO_PASSWORD='${{ secrets.SUDO_PASSWORD }}'
+            export HEALTH_URL='http://127.0.0.1:4000/api/health'
             # The repo has already been rsynced to ~/app. Run the safe deploy script from there.
             if [ -f ~/app/deploy/safe_deploy.sh ]; then
               chmod +x ~/app/deploy/safe_deploy.sh
