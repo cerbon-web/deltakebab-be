@@ -1,4 +1,5 @@
-﻿import path from 'path';
+﻿import fs from 'fs';
+import path from 'path';
 import dotenv from 'dotenv';
 import { buildDatabaseUrlFromEnv } from './databaseUrl';
 
@@ -47,13 +48,16 @@ const dbFromUrl = parseDatabaseUrl(process.env.DATABASE_URL);
 const nodeEnv = (process.env.NODE_ENV || 'local').toLowerCase();
 const environment = nodeEnv === 'production' ? 'production' : 'local';
 
-const defaultSslKeyPath = '/etc/letsencrypt/live/delta-api.cerbon.id/privkey.pem';
-const defaultSslCertPath = '/etc/letsencrypt/live/delta-api.cerbon.id/fullchain.pem';
-const defaultSslCaPath = '/etc/letsencrypt/live/delta-api.cerbon.id/chain.pem';
+const sslDomain = process.env.SSL_DOMAIN?.trim() || 'delta-api.cerbon.id';
+const defaultSslKeyPath = `/etc/letsencrypt/live/${sslDomain}/privkey.pem`;
+const defaultSslCertPath = `/etc/letsencrypt/live/${sslDomain}/fullchain.pem`;
+const defaultSslCaPath = `/etc/letsencrypt/live/${sslDomain}/chain.pem`;
 
 const sslKeyPath = process.env.SSL_KEY_PATH?.trim() || (environment === 'production' ? defaultSslKeyPath : undefined);
 const sslCertPath = process.env.SSL_CERT_PATH?.trim() || (environment === 'production' ? defaultSslCertPath : undefined);
 const sslCaPath = process.env.SSL_CA_PATH?.trim() || (environment === 'production' ? defaultSslCaPath : undefined);
+
+const sslFilesExist = sslKeyPath && sslCertPath && fs.existsSync(sslKeyPath) && fs.existsSync(sslCertPath);
 
 export const config = {
   environment,
@@ -65,7 +69,7 @@ export const config = {
   sslKeyPath,
   sslCertPath,
   sslCaPath,
-  useHttps: environment === 'production' && Boolean(sslKeyPath && sslCertPath),
+  useHttps: environment === 'production' && Boolean(sslKeyPath && sslCertPath && sslFilesExist),
   db: dbFromUrl || {
     host: process.env.DB_HOST || '127.0.0.1',
     port: Number(process.env.DB_PORT || 3306),

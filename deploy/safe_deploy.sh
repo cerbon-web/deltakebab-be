@@ -571,26 +571,42 @@ check_health_for_url() {
   local url="$1"
   local retries=30
   local delay=2
-  local urls=("$url")
+  local want_https=0
+  local https_ok=0
+  local http_ok=0
 
   if [[ "$url" == https://* ]]; then
-    urls+=("${url/https:/http:}")
+    want_https=1
   fi
 
   log "Checking health endpoint $url"
   for i in $(seq 1 $retries); do
-    local ok=0
-    for candidate in "${urls[@]}"; do
-      local curl_args=(curl -sS --fail --max-time 5)
-      if [[ "$candidate" == https://* ]]; then
-        curl_args+=(--insecure)
-      fi
+    https_ok=0
+    http_ok=0
 
-      if "${curl_args[@]}" "$candidate" | grep -q '"status".*"ok"'; then
-        log "Health endpoint reports OK at $candidate"
+    if [[ "$url" == https://* ]]; then
+      local curl_args=(curl -sS --fail --max-time 5 --insecure)
+      if "${curl_args[@]}" "$url" | grep -q '"status".*"ok"'; then
+        log "Health endpoint reports OK at $url"
         return 0
       fi
-    done
+      log "HTTPS check failed for $url"
+      http_ok=0
+      local fallback_url="${url/https:/http:}"
+      if curl -sS --fail --max-time 5 "$fallback_url" | grep -q '"status".*"ok"'; then
+        http_ok=1
+      fi
+    else
+      if curl -sS --fail --max-time 5 "$url" | grep -q '"status".*"ok"'; then
+        log "Health endpoint reports OK at $url"
+        return 0
+      fi
+    fi
+
+    if [[ "$want_https" -eq 1 && "$http_ok" -eq 1 ]]; then
+      log "HTTPS health check failed but HTTP succeeded for $url; deployment requires HTTPS"
+      return 1
+    fi
 
     log "Health check failed ($i/$retries), retrying in $delay seconds"
     sleep "$delay"

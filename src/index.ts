@@ -31,10 +31,10 @@ if (config.useHttps) {
       },
       app
     );
-    logger.info('Starting HTTPS server');
+    logger.info(`Starting HTTPS server using key=${config.sslKeyPath} cert=${config.sslCertPath}`);
   } catch (error) {
-    logger.error('Failed to initialize HTTPS server, falling back to HTTP', error);
-    server = http.createServer(app);
+    logger.error('Failed to initialize HTTPS server; aborting startup', error);
+    process.exit(1);
   }
 } else {
   server = http.createServer(app);
