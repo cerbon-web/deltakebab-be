@@ -293,6 +293,13 @@ ensure_tls_prerequisites() {
     return 0
   fi
 
+  if run_sudo certbot certificates 2>/dev/null | grep -q "$ssl_domain"; then
+    export SSL_KEY_PATH="/etc/letsencrypt/live/$ssl_domain/privkey.pem"
+    export SSL_CERT_PATH="/etc/letsencrypt/live/$ssl_domain/fullchain.pem"
+    log "Certbot reports a certificate for $ssl_domain; continuing with the expected Certbot paths"
+    return 0
+  fi
+
   if [ "$certbot_status" -ne 0 ]; then
     log "Failed to obtain Let's Encrypt certificate for $ssl_domain"
     return 1
