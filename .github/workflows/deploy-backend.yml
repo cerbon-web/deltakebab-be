@@ -13,6 +13,8 @@ jobs:
   deploy:
     name: Deploy backend
     runs-on: ubuntu-latest
+    env:
+      NODE_INSTALL_VERSION: '20'
 
     steps:
       - name: Checkout backend
@@ -74,6 +76,16 @@ jobs:
           Path('.env.production').write_text('\n'.join(lines) + '\n')
           PY
 
+      - name: Build backend artifacts on runner
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_INSTALL_VERSION }}
+
+      - name: Install and build (runner)
+        run: |
+          npm ci
+          npm run build
+
       - name: Sync backend files to server
         run: |
           SSH_PORT="${{ secrets.SSH_PORT }}"
@@ -91,12 +103,13 @@ jobs:
         env:
           PM2_NAME: delta-be
           HEALTH_URL: https://delta-api.cerbon.id:4000/api/health
-          NODE_INSTALL_VERSION: '20'
+          SUDO_PASSWORD: ${{ secrets.SUDO_PASSWORD }}
         run: |
           SSH_PORT="${{ secrets.SSH_PORT }}"
           if [ -z "$SSH_PORT" ]; then SSH_PORT=22; fi
-          ssh -p "$SSH_PORT" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" <<'EOF'
+          SUDO_PASSWORD="${SUDO_PASSWORD:-}" ssh -p "$SSH_PORT" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" <<'EOF'
             set -e
+            export SUDO_PASSWORD="${SUDO_PASSWORD:-}"
             # The repo has already been rsynced to ~/app. Run the safe deploy script from there.
             if [ -f ~/app/deploy/safe_deploy.sh ]; then
               chmod +x ~/app/deploy/safe_deploy.sh

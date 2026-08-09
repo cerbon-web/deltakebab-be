@@ -44,6 +44,31 @@ rotate_backups() {
 
 # Ensure a command is present; attempt to install common tools automatically.
 # This makes deploys to fresh droplets more resilient when required tools are missing.
+run_sudo() {
+  # Run command with sudo if needed. Supports non-interactive password via
+  # SUDO_PASSWORD environment variable (will be used via stdin).
+  if command -v sudo >/dev/null 2>&1; then
+    # passwordless sudo
+    if sudo -n true >/dev/null 2>&1; then
+      sudo "$@"
+      return $?
+    fi
+    # use provided password non-interactively
+    if [ -n "${SUDO_PASSWORD:-}" ]; then
+      printf '%s\n' "$SUDO_PASSWORD" | sudo -S "$@"
+      return $?
+    fi
+    # no sudo or password available
+    return 2
+  fi
+  # if no sudo, ensure we are root
+  if [ "$(id -u)" -eq 0 ]; then
+    "$@"
+    return $?
+  fi
+  return 2
+}
+
 ensure_command() {
   local cmd="$1"
   local hint="$2"
@@ -52,43 +77,35 @@ ensure_command() {
   fi
   log "Command '$cmd' not found; attempting automated install"
 
-  # prefer sudo when available, otherwise require root
-  local SUDO=""
-  if command -v sudo >/dev/null 2>&1; then
-    SUDO="sudo"
-  elif [ "$(id -u)" -ne 0 ]; then
-    log "Cannot install $cmd: neither sudo nor root privileges available"
-    return 1
-  fi
-
   case "$cmd" in
     node|npm)
-      # Allow overriding desired major via NODE_INSTALL_VERSION env var (default 20)
       NODE_INSTALL_VERSION="${NODE_INSTALL_VERSION:-20}"
-      if command -v curl >/dev/null 2>&1; then
-        log "Using NodeSource setup script to install Node $NODE_INSTALL_VERSION.x"
-        if ! curl -fsSL "https://deb.nodesource.com/setup_${NODE_INSTALL_VERSION}.x" | $SUDO -E bash -; then
-          log "NodeSource setup failed; falling back to apt packages"
-        fi
-      else
+      if ! command -v curl >/dev/null 2>&1; then
         log "curl not found; installing curl first"
-        DEBIAN_FRONTEND=noninteractive $SUDO apt-get update -qq
-        DEBIAN_FRONTEND=noninteractive $SUDO apt-get install -y -qq curl
-        if ! curl -fsSL "https://deb.nodesource.com/setup_${NODE_INSTALL_VERSION}.x" | $SUDO -E bash -; then
-          log "NodeSource setup failed after installing curl; falling back to apt packages"
+        if ! run_sudo apt-get update -qq || ! run_sudo apt-get install -y -qq curl; then
+          log "Failed to install curl"
+          return 1
         fi
       fi
-      DEBIAN_FRONTEND=noninteractive $SUDO apt-get update -qq
-      DEBIAN_FRONTEND=noninteractive $SUDO apt-get install -y -qq nodejs || {
-        log "Failed to install nodejs from NodeSource/apt"
+      # download NodeSource setup script and run it with sudo if needed
+      tmp_script="/tmp/nodesource_setup_${NODE_INSTALL_VERSION}.sh"
+      if ! curl -fsSL "https://deb.nodesource.com/setup_${NODE_INSTALL_VERSION}.x" -o "$tmp_script"; then
+        log "Failed to download NodeSource setup script"
+      else
+        if ! run_sudo bash "$tmp_script"; then
+          log "NodeSource setup failed; falling back to apt packages"
+        fi
+        rm -f "$tmp_script" || true
+      fi
+      if ! run_sudo apt-get update -qq || ! run_sudo apt-get install -y -qq nodejs; then
+        log "Failed to install nodejs from apt"
         return 1
-      }
+      fi
       ;;
     pm2)
-      # pm2 requires npm; ensure npm/node first
       ensure_command npm || return 1
       log "Installing pm2 globally via npm"
-      if ! $SUDO npm install -g pm2 --silent; then
+      if ! run_sudo npm install -g pm2 --silent; then
         log "Global npm install of pm2 failed; trying without sudo"
         if ! npm install -g pm2 --silent; then
           log "Failed to install pm2"
@@ -97,8 +114,10 @@ ensure_command() {
       fi
       ;;
     curl)
-      DEBIAN_FRONTEND=noninteractive $SUDO apt-get update -qq
-      DEBIAN_FRONTEND=noninteractive $SUDO apt-get install -y -qq curl
+      if ! run_sudo apt-get update -qq || ! run_sudo apt-get install -y -qq curl; then
+        log "Failed to install curl"
+        return 1
+      fi
       ;;
     *)
       log "No automated installer configured for '$cmd' - $hint"
