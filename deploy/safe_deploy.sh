@@ -10,7 +10,7 @@ ARTIFACT_DIR=${3:-.}
 KEEP_BACKUPS=${4:-5}
 PM2_NAME=${PM2_NAME:-delta-be}
 PORT=${PORT:-4000}
-HEALTH_URL=${HEALTH_URL:-http://127.0.0.1:${PORT}/api/health}
+HEALTH_URL=${HEALTH_URL:-https://127.0.0.1:${PORT}/api/health}
 
 # Prevent OOM crashes during TypeScript builds in constrained deployment environments.
 # The default V8 heap is often too low on smaller droplets and CI runners.
@@ -183,6 +183,73 @@ PY
   log "Local database bootstrap completed with warnings; continuing"
 }
 
+ensure_tls_prerequisites() {
+  local app_dir="$1"
+  local ssl_domain="${SSL_DOMAIN:-}"
+  local ssl_email="${SSL_EMAIL:-}"
+  local ssl_key_path="${SSL_KEY_PATH:-}"
+  local ssl_cert_path="${SSL_CERT_PATH:-}"
+  local ssl_ca_path="${SSL_CA_PATH:-}"
+
+  if [ -f "$app_dir/.env.production" ]; then
+    log "Loading TLS settings from $app_dir/.env.production"
+    set -a
+    # shellcheck source=/dev/null
+    . "$app_dir/.env.production"
+    set +a
+    ssl_domain="${SSL_DOMAIN:-$ssl_domain}"
+    ssl_email="${SSL_EMAIL:-$ssl_email}"
+    ssl_key_path="${SSL_KEY_PATH:-$ssl_key_path}"
+    ssl_cert_path="${SSL_CERT_PATH:-$ssl_cert_path}"
+    ssl_ca_path="${SSL_CA_PATH:-$ssl_ca_path}"
+  fi
+
+  if [ -z "$ssl_domain" ]; then
+    ssl_domain="delta-api.cerbon.id"
+  fi
+  if [ -z "$ssl_email" ]; then
+    ssl_email="admin@$ssl_domain"
+  fi
+  if [ -z "$ssl_key_path" ]; then
+    ssl_key_path="/etc/letsencrypt/live/$ssl_domain/privkey.pem"
+  fi
+  if [ -z "$ssl_cert_path" ]; then
+    ssl_cert_path="/etc/letsencrypt/live/$ssl_domain/fullchain.pem"
+  fi
+  if [ -z "$ssl_ca_path" ]; then
+    ssl_ca_path="/etc/letsencrypt/live/$ssl_domain/chain.pem"
+  fi
+
+  export SSL_DOMAIN="$ssl_domain"
+  export SSL_EMAIL="$ssl_email"
+  export SSL_KEY_PATH="$ssl_key_path"
+  export SSL_CERT_PATH="$ssl_cert_path"
+  export SSL_CA_PATH="$ssl_ca_path"
+
+  if [ -f "$ssl_key_path" ] && [ -f "$ssl_cert_path" ]; then
+    log "TLS certificate files already exist for $ssl_domain"
+    return 0
+  fi
+
+  if ! ensure_command certbot "install certbot for Let's Encrypt"; then
+    log "certbot is required for TLS but could not be installed automatically; aborting"
+    return 1
+  fi
+
+  log "Requesting Let's Encrypt certificate for $ssl_domain"
+  if ! run_sudo certbot certonly --non-interactive --agree-tos --standalone --preferred-challenges http --email "$ssl_email" -d "$ssl_domain"; then
+    log "Failed to obtain Let's Encrypt certificate for $ssl_domain"
+    return 1
+  fi
+
+  if [ ! -f "$ssl_key_path" ] || [ ! -f "$ssl_cert_path" ]; then
+    log "Let's Encrypt certificate issuance completed but expected files were not created"
+    return 1
+  fi
+
+  log "TLS certificate provisioned successfully for $ssl_domain"
+}
+
 # Rotate backups: keep latest $KEEP_BACKUPS
 rotate_backups() {
   local keep="$KEEP_BACKUPS"
@@ -279,6 +346,12 @@ ensure_command() {
     curl)
       if ! run_sudo apt-get update -qq || ! run_sudo apt-get install -y -qq curl; then
         log "Failed to install curl"
+        return 1
+      fi
+      ;;
+    certbot)
+      if ! run_sudo apt-get update -qq || ! run_sudo apt-get install -y -qq certbot; then
+        log "Failed to install certbot"
         return 1
       fi
       ;;
@@ -510,6 +583,7 @@ main() {
     fi
   fi
 
+  ensure_tls_prerequisites "$release_tmp"
   ensure_database_prerequisites "$release_tmp"
 
   # Run the staged release directly on a test port so it doesn't conflict with the live process
@@ -524,7 +598,7 @@ main() {
   # Wait for the staged release to prove the database is reachable before treating it as valid
   local verified=1
   if wait_for_database_verification "$release_tmp"; then
-    if check_health_for_url "http://127.0.0.1:${test_port}/api/health"; then
+    if check_health_for_url "https://127.0.0.1:${test_port}/api/health"; then
       log "Staged release verified DB connection and health endpoint"
       verified=0
     else

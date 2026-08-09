@@ -39,6 +39,8 @@ jobs:
           DB_USER: ${{ secrets.DB_USER }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_NAME: ${{ secrets.DB_NAME }}
+          SSL_DOMAIN: ${{ secrets.SSL_DOMAIN }}
+          SSL_EMAIL: ${{ secrets.SSL_EMAIL }}
           SSL_KEY_PATH: ${{ secrets.SSL_KEY_PATH }}
           SSL_CERT_PATH: ${{ secrets.SSL_CERT_PATH }}
           SSL_CA_PATH: ${{ secrets.SSL_CA_PATH }}
@@ -55,9 +57,11 @@ jobs:
           missing = [key for key in required if not os.environ.get(key)]
           if missing:
               raise SystemExit('Missing required production secrets: ' + ', '.join(missing))
-          ssl_key = os.environ.get('SSL_KEY_PATH') or '/etc/letsencrypt/live/delta-api.cerbon.id/privkey.pem'
-          ssl_cert = os.environ.get('SSL_CERT_PATH') or '/etc/letsencrypt/live/delta-api.cerbon.id/fullchain.pem'
-          ssl_ca = os.environ.get('SSL_CA_PATH') or '/etc/letsencrypt/live/delta-api.cerbon.id/chain.pem'
+          ssl_domain = os.environ.get('SSL_DOMAIN') or 'delta-api.cerbon.id'
+          ssl_email = os.environ.get('SSL_EMAIL') or 'admin@delta-api.cerbon.id'
+          ssl_key = os.environ.get('SSL_KEY_PATH') or f'/etc/letsencrypt/live/{ssl_domain}/privkey.pem'
+          ssl_cert = os.environ.get('SSL_CERT_PATH') or f'/etc/letsencrypt/live/{ssl_domain}/fullchain.pem'
+          ssl_ca = os.environ.get('SSL_CA_PATH') or f'/etc/letsencrypt/live/{ssl_domain}/chain.pem'
           lines = [
               'NODE_ENV=production',
               'PORT=4000',
@@ -67,6 +71,8 @@ jobs:
               f'DB_PASSWORD={os.environ["DB_PASSWORD"]}',
               f'DB_NAME={os.environ["DB_NAME"]}',
               f'DATABASE_URL=mysql://{quote_plus(os.environ["DB_USER"])}:{quote_plus(os.environ["DB_PASSWORD"])}@{os.environ["DB_HOST"]}:{os.environ["DB_PORT"]}/{quote_plus(os.environ["DB_NAME"])}',
+              f'SSL_DOMAIN={ssl_domain}',
+              f'SSL_EMAIL={ssl_email}',
               f'SSL_KEY_PATH={ssl_key}',
               f'SSL_CERT_PATH={ssl_cert}',
               f'SSL_CA_PATH={ssl_ca}',
@@ -123,7 +129,7 @@ jobs:
       - name: Install dependencies, build, verify and restart PM2 (safe deploy)
         env:
           PM2_NAME: delta-be
-          HEALTH_URL: http://127.0.0.1:4000/api/health
+          HEALTH_URL: https://127.0.0.1:4000/api/health
           SUDO_PASSWORD: ${{ secrets.SUDO_PASSWORD }}
           NODE_INSTALL_VERSION: '22'
           SKIP_REMOTE_BUILD: 'true'
@@ -133,7 +139,7 @@ jobs:
           ssh -p "$SSH_PORT" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" <<EOF
             set -e
             export SUDO_PASSWORD='${{ secrets.SUDO_PASSWORD }}'
-            export HEALTH_URL='http://127.0.0.1:4000/api/health'
+            export HEALTH_URL='https://127.0.0.1:4000/api/health'
             # The repo has already been rsynced to ~/app. Run the safe deploy script from there.
             if [ -f ~/app/deploy/safe_deploy.sh ]; then
               chmod +x ~/app/deploy/safe_deploy.sh
