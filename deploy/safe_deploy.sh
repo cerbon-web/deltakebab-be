@@ -276,7 +276,9 @@ ensure_tls_prerequisites() {
 
   log "Requesting Let's Encrypt certificate for $ssl_domain"
   local certbot_status=0
-  if ! run_sudo certbot certonly --non-interactive --agree-tos --standalone --preferred-challenges http --email "$ssl_email" -d "$ssl_domain"; then
+  if run_sudo certbot certonly --non-interactive --agree-tos --standalone --preferred-challenges http --email "$ssl_email" -d "$ssl_domain"; then
+    certbot_status=0
+  else
     certbot_status=$?
   fi
 
