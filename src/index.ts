@@ -53,7 +53,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
-app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
+const appRoot = path.resolve(__dirname, '..');
+app.use('/uploads', express.static(path.resolve(appRoot, 'uploads')));
 app.use('/api', router);
 app.use(errorHandler);
 
