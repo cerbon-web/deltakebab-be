@@ -422,6 +422,17 @@ ensure_tls_prerequisites() {
     else
       log "Certbot did not need to issue a new certificate; existing TLS files are available for $ssl_domain"
     fi
+
+    if ! copy_tls_if_unreadable "$SSL_KEY_PATH" "$SSL_CERT_PATH" "$ssl_ca_path" "$app_dir"; then
+      log "Failed to make TLS files readable inside the release after certificate issuance; aborting deployment"
+      return 1
+    fi
+
+    log "Final TLS env for release: SSL_KEY_PATH=$SSL_KEY_PATH SSL_CERT_PATH=$SSL_CERT_PATH SSL_CA_PATH=$SSL_CA_PATH"
+    log "Release local ssl dir exists: $( [ -d "$app_dir/ssl" ] && echo yes || echo no )"
+    if [ -d "$app_dir/ssl" ]; then
+      log "Release local ssl contents: $(ls -1 "$app_dir/ssl" 2>/dev/null | tr '\n' ',' | sed 's/,$//')"
+    fi
     return 0
   fi
 
@@ -429,6 +440,17 @@ ensure_tls_prerequisites() {
     export SSL_KEY_PATH="/etc/letsencrypt/live/$ssl_domain/privkey.pem"
     export SSL_CERT_PATH="/etc/letsencrypt/live/$ssl_domain/fullchain.pem"
     log "Certbot reports a certificate for $ssl_domain; continuing with the expected Certbot paths"
+
+    if ! copy_tls_if_unreadable "$SSL_KEY_PATH" "$SSL_CERT_PATH" "$ssl_ca_path" "$app_dir"; then
+      log "Failed to make TLS files readable inside the release using expected Certbot paths; aborting deployment"
+      return 1
+    fi
+
+    log "Final TLS env for release: SSL_KEY_PATH=$SSL_KEY_PATH SSL_CERT_PATH=$SSL_CERT_PATH SSL_CA_PATH=$SSL_CA_PATH"
+    log "Release local ssl dir exists: $( [ -d "$app_dir/ssl" ] && echo yes || echo no )"
+    if [ -d "$app_dir/ssl" ]; then
+      log "Release local ssl contents: $(ls -1 "$app_dir/ssl" 2>/dev/null | tr '\n' ',' | sed 's/,$//')"
+    fi
     return 0
   fi
 
