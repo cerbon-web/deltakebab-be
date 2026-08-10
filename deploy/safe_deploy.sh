@@ -732,6 +732,51 @@ verify_database_from_release() {
   )
 }
 
+database_has_tables() {
+  local app_dir="$1"
+  local output
+  local code
+
+  if [ ! -f "$app_dir/scripts/check-db-empty.js" ]; then
+    log "Database table check helper not found at $app_dir/scripts/check-db-empty.js"
+    return 2
+  fi
+
+  set +e
+  output=$(cd "$app_dir" && node scripts/check-db-empty.js 2>&1)
+  code=$?
+  set -e
+
+  if [ "$code" -eq 0 ]; then
+    log "Database is empty (no tables found)."
+    return 1
+  fi
+  if [ "$code" -eq 1 ]; then
+    log "Database already contains tables."
+    return 0
+  fi
+
+  log "Database table check failed with code $code: $output"
+  return 2
+}
+
+live_deployment_should_verify() {
+  local app_dir="$1"
+  if database_has_tables "$app_dir"; then
+    log "Live database already contains tables; verifying promoted release with health checks"
+    return 0
+  fi
+
+  local status=$?
+  if [ "$status" -eq 2 ]; then
+    log "Live database state could not be determined; defaulting to verification and health check"
+    return 0
+  fi
+
+  log "Live database is empty; skipping final health verification to allow initial seed to complete"
+  return 1
+}
+
 # Wait for the database check to succeed for a release directory
 wait_for_database_verification() {
   local app_dir="$1"
@@ -949,11 +994,15 @@ main() {
     exit 1
   fi
 
-  if ! check_health; then
-    log "Health check failed for PM2-managed process"
-    log "Attempting to restore previous release"
-    restore_previous_release "$backup" || true
-    exit 1
+  if live_deployment_should_verify "$DEPLOY_DIR"; then
+    if ! check_health; then
+      log "Health check failed for PM2-managed process"
+      log "Attempting to restore previous release"
+      restore_previous_release "$backup" || true
+      exit 1
+    fi
+  else
+    log "Health check skipped for promoted release because live database is empty and initial seed is still expected to run"
   fi
 
   log "Staged release verified. Creating backup of the previous deployment (if present)"
