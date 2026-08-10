@@ -1966,13 +1966,13 @@ async function main() {
     {
       id: "delta-kebab-tczew-main",
       name: "Delta Kebab - Tczew (Jodłowa)",
-      street: "Jodłowa",
+      street: "ul. Jodłowa",
       buildingNumber: "11A",
       city: "Tczew",
       postalCode: "83-110",
       latitude: 54.097471,
       longitude: 18.768975,
-      phone: null,
+      phone: "739 659 985",
       active: true,
     },
     {
@@ -2047,6 +2047,18 @@ async function main() {
       phone: null,
       active: true,
     },
+    {
+      id: "delta-kebab-branch-13",
+      name: "Delta Kebab - Sierakowice",
+      street: "Kartuska",
+      buildingNumber: "4",
+      city: "Sierakowice",
+      postalCode: "83-340",
+      latitude: 54.344535,
+      longitude: 17.893697,
+      phone: "+48 606 526 609",
+      active: true,
+    },
   ];
   // branches.json is no longer used and can be removed from the project
 
@@ -2061,25 +2073,6 @@ async function main() {
   });
   console.log(`  ✓ Created restaurant: ${restaurant.name}`);
 
-  const branch = await prisma.branch.upsert({
-    where: { id: "delta-kebab-tczew-main" },
-    update: {},
-    create: {
-      id: "delta-kebab-tczew-main",
-      restaurantId: restaurant.id,
-      name: "Tczew - Main Branch",
-      street: "ul. Jodłowa",
-      buildingNumber: "11A",
-      city: "Tczew",
-      postalCode: "83-110",
-      latitude: 54.097471,
-      longitude: 18.768975,
-      phone: "739 659 985",
-      active: true,
-    },
-  });
-  console.log(`  ✓ Created branch: ${branch.name}`);
-
   for (const branchData of branchSeedData) {
     const seededBranch = await prisma.branch.upsert({
       where: { id: branchData.id },
@@ -2092,10 +2085,10 @@ async function main() {
     console.log(`  ✓ Created branch: ${seededBranch.name}`);
   }
 
-  const createdBranches = [{ id: branch.id, name: branch.name }];
-  for (const seededBranch of branchSeedData) {
-    createdBranches.push({ id: seededBranch.id, name: seededBranch.name });
-  }
+  const createdBranches = branchSeedData.map((branchData) => ({
+    id: branchData.id,
+    name: branchData.name,
+  }));
 
   for (const branchSeed of createdBranches) {
     await ensureBranchMenuSeed(branchSeed.id, branchSeed.name);
