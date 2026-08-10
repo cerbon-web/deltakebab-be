@@ -2090,6 +2090,11 @@ async function main() {
     name: branchData.name,
   }));
 
+  const branch = createdBranches.find((branchData) => branchData.id === "delta-kebab-tczew-main");
+  if (!branch) {
+    throw new Error("Missing main branch seed data: delta-kebab-tczew-main");
+  }
+
   for (const branchSeed of createdBranches) {
     await ensureBranchMenuSeed(branchSeed.id, branchSeed.name);
   }
