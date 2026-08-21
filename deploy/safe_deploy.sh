@@ -361,7 +361,7 @@ ensure_tls_prerequisites() {
   fi
 
   if [ -z "$ssl_domain" ]; then
-    ssl_domain="delta-api.cerbon.id"
+    ssl_domain="api.deltakebab.com"
   fi
   if [ -z "$ssl_email" ]; then
     ssl_email="admin@$ssl_domain"
